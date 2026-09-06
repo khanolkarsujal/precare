@@ -4,7 +4,13 @@ import json
 import time
 import uuid
 import logging
+from pathlib import Path
 from typing import List, Optional, Dict, Any
+from dotenv import load_dotenv
+
+# Load .env configuration
+load_dotenv(Path.cwd() / ".env")
+
 from fastapi import FastAPI, HTTPException, Request, Response, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field

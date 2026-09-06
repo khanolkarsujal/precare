@@ -1,37 +1,59 @@
 import os
+import re
 import json
 import logging
+from pathlib import Path
 from typing import Dict, Any, List, Optional
 import httpx
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv(Path.cwd() / ".env")
 
 logger = logging.getLogger("precare.ai")
 
 # -----------------------------------------------------------------------------
 # AI Provider Configuration
 # -----------------------------------------------------------------------------
-# Supported: "ollama" (local dev default), "groq" (free tier online), "openai_compatible"
-AI_PROVIDER = os.getenv("AI_PROVIDER", "ollama").lower()
+# Options:
+#   "api"   -> Cloud AI API via OpenRouter / OpenAI-compatible provider (DEFAULT)
+#   "local" -> Local Ollama instance (qwen3:8b)
+AI_PROVIDER = os.getenv("AI_PROVIDER", "api").lower()
 
-# Local Ollama settings
+# Online API configuration (OpenRouter / Groq / OpenAI compatible)
+AI_API_BASE = os.getenv("AI_API_BASE", "https://openrouter.ai/api/v1").rstrip('/')
+AI_API_KEY = os.getenv("AI_API_KEY", "").strip()
+AI_MODEL = os.getenv("AI_MODEL", "meta-llama/llama-3.1-8b-instruct")
+
+# Local Ollama configuration
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip('/')
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:8b")
 
-# Free-Tier Online AI Settings (e.g. Groq free tier or OpenRouter free models)
-AI_API_BASE = os.getenv("AI_API_BASE", "https://api.groq.com/openai/v1").rstrip('/')
-AI_API_KEY = os.getenv("AI_API_KEY", "").strip()
-AI_MODEL = os.getenv("AI_MODEL", "llama-3.1-8b-instant")
+
+def _is_local_provider() -> bool:
+    return AI_PROVIDER in ("local", "ollama")
+
+
+def _clean_json_content(raw: str) -> str:
+    """Strip markdown code blocks or conversational text to extract pure JSON."""
+    raw = raw.strip()
+    match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', raw)
+    if match:
+        return match.group(1).strip()
+    return raw
 
 
 async def check_ai_status() -> Dict[str, Any]:
-    """Check whether configured AI provider (local Ollama or online API) is operational."""
-    if AI_PROVIDER == "ollama":
+    """Check status of either local Ollama or the online API."""
+    if _is_local_provider():
         try:
             async with httpx.AsyncClient(timeout=3.0) as client:
                 res = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
                 if res.status_code != 200:
                     return {
                         "ok": False,
-                        "error": "Local AI service is unavailable. Please make sure Ollama is running.",
+                        "provider": "local (Ollama)",
+                        "error": "Local Ollama service is unavailable. Please make sure Ollama is running.",
                     }
                 data = res.json()
                 models = data.get("models", [])
@@ -42,13 +64,14 @@ async def check_ai_status() -> Dict[str, Any]:
                 if not has_model:
                     return {
                         "ok": False,
+                        "provider": "local (Ollama)",
                         "modelMissing": True,
                         "error": f"Model '{OLLAMA_MODEL}' is missing. Please run 'ollama pull {OLLAMA_MODEL}'.",
                         "availableModels": [m.get("name") for m in models],
                     }
                 return {
                     "ok": True,
-                    "provider": "ollama",
+                    "provider": "local",
                     "model": OLLAMA_MODEL,
                     "server": OLLAMA_BASE_URL,
                 }
@@ -56,36 +79,38 @@ async def check_ai_status() -> Dict[str, Any]:
             logger.warning(f"Ollama status check failed: {e}")
             return {
                 "ok": False,
-                "provider": "ollama",
-                "error": "Local AI service is unavailable. Please make sure Ollama is running.",
+                "provider": "local",
+                "error": "Local Ollama service is unavailable. Ensure Ollama is started.",
                 "details": str(e),
             }
 
-    # Free online AI provider (Groq / OpenRouter / OpenAI-compatible)
+    # Online API provider (OpenRouter / Cloud)
     if not AI_API_KEY:
         return {
             "ok": False,
-            "provider": AI_PROVIDER,
-            "error": f"AI_API_KEY environment variable is not set for provider '{AI_PROVIDER}'.",
+            "provider": "api (Online)",
+            "error": "AI_API_KEY environment variable is not set.",
         }
-    
+
     return {
         "ok": True,
-        "provider": AI_PROVIDER,
+        "provider": "api",
         "model": AI_MODEL,
         "server": AI_API_BASE,
     }
 
 
-async def _execute_online_ai_call(task_name: str, messages: List[Dict[str, str]], max_tokens: int = 80) -> Optional[Dict[str, Any]]:
-    """Execute JSON chat completion against free-tier online AI provider (e.g. Groq)."""
+async def _execute_online_api_call(task_name: str, messages: List[Dict[str, str]], max_tokens: int = 80) -> Optional[Dict[str, Any]]:
+    """Execute JSON chat completion against OpenRouter / OpenAI-compatible API."""
     if not AI_API_KEY:
-        logger.warning(f"[{AI_PROVIDER}] AI_API_KEY not configured for online inference.")
+        logger.warning("[AI API] AI_API_KEY is not configured.")
         return None
 
     headers = {
         "Authorization": f"Bearer {AI_API_KEY}",
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://precare.health",
+        "X-Title": "PreCare Clinical Intake",
     }
     payload = {
         "model": AI_MODEL,
@@ -96,23 +121,24 @@ async def _execute_online_ai_call(task_name: str, messages: List[Dict[str, str]]
     }
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=12.0) as client:
             res = await client.post(f"{AI_API_BASE}/chat/completions", headers=headers, json=payload)
             if res.status_code != 200:
-                logger.error(f"[{AI_PROVIDER}] Online AI failed: HTTP {res.status_code} - {res.text}")
+                logger.error(f"[AI API] Request failed: HTTP {res.status_code} - {res.text}")
                 return None
             data = res.json()
-            content = data["choices"][0]["message"]["content"]
-            return json.loads(content)
+            raw_content = data["choices"][0]["message"]["content"]
+            clean_content = _clean_json_content(raw_content)
+            return json.loads(clean_content)
     except Exception as e:
-        logger.error(f"[{AI_PROVIDER}] Error executing online call for {task_name}: {e}")
+        logger.error(f"[AI API] Error executing call for {task_name}: {e}")
         return None
 
 
 async def _execute_ollama_call(task_name: str, messages: List[Dict[str, str]], max_tokens: int = 80) -> Optional[Dict[str, Any]]:
     """Execute local Ollama call with think=False and token cap."""
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=20.0) as client:
             payload = {
                 "model": OLLAMA_MODEL,
                 "messages": messages,
@@ -131,18 +157,19 @@ async def _execute_ollama_call(task_name: str, messages: List[Dict[str, str]], m
                 return None
             data = res.json()
             content = data.get("message", {}).get("content", "{}")
-            return json.loads(content)
+            clean_content = _clean_json_content(content)
+            return json.loads(clean_content)
     except Exception as e:
         logger.error(f"[OLLAMA] Error executing call for {task_name}: {e}")
         return None
 
 
 async def execute_ai_call(task_name: str, messages: List[Dict[str, str]], max_tokens: int = 80) -> Optional[Dict[str, Any]]:
-    """Route AI inference to either local Ollama or configured free online provider."""
-    if AI_PROVIDER == "ollama":
+    """Route AI inference to either local Ollama or the default online API."""
+    if _is_local_provider():
         return await _execute_ollama_call(task_name, messages, max_tokens)
     else:
-        return await _execute_online_ai_call(task_name, messages, max_tokens)
+        return await _execute_online_api_call(task_name, messages, max_tokens)
 
 
 async def analyze_complaint_with_ai(complaint: str) -> Dict[str, Any]:
@@ -169,7 +196,7 @@ async def analyze_complaint_with_ai(complaint: str) -> Dict[str, Any]:
             "duration": None,
             "location": None,
             "severity": None,
-            "note": "Fallback heuristic used (AI offline)",
+            "note": "Fallback heuristic used",
         }
 
     return {
