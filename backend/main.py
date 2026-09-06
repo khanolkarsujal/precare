@@ -45,7 +45,7 @@ app = FastAPI(
 # Default covers standard local development ports and common deployment origins.
 cors_origins_raw = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://localhost:8000"
+    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://localhost:8000,https://precare-five.vercel.app"
 )
 allowed_origins = [origin.strip() for origin in cors_origins_raw.split(",") if origin.strip()]
 

@@ -8,7 +8,7 @@ services:
     runtime: python
     region: oregon
     plan: free
-    buildCommand: pip install -r backend/requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
@@ -17,14 +17,12 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: CORS_ORIGINS
-        sync: false
-      - key: DATABASE_URL
-        sync: false
+        value: https://precare-five.vercel.app
       - key: AI_PROVIDER
-        value: groq
+        value: api
       - key: AI_API_BASE
-        value: https://api.groq.com/openai/v1
+        value: https://openrouter.ai/api/v1
+      - key: AI_MODEL
+        value: meta-llama/llama-3.1-8b-instruct
       - key: AI_API_KEY
         sync: false
-      - key: AI_MODEL
-        value: llama-3.1-8b-instant
