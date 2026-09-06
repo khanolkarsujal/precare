@@ -56,10 +56,10 @@ export default function DevPanel() {
     });
   }, []);
 
-  // Keyboard shortcut: Ctrl + Shift + D (or Cmd + Shift + D) to toggle DevPanel
+  // Keyboard shortcut: Alt + Shift + D (or Option + Shift + D) to toggle DevPanel
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+      if (e.altKey && e.shiftKey && (e.key === 'D' || e.key === 'd' || e.code === 'KeyD')) {
         e.preventDefault();
         setIsUnlocked(true);
         setIsOpen((prev) => !prev);
@@ -157,7 +157,7 @@ export default function DevPanel() {
         type="button"
         className="dev-tap-target"
         onClick={handleTap}
-        title="Developer Mode (Ctrl+Shift+D or tap 5 times)"
+        title="Developer Mode (Alt+Shift+D or tap 5 times)"
         aria-label="Developer Mode"
       >
         ⚙
