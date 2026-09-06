@@ -18,12 +18,15 @@ const DEV_TAP_WINDOW_MS = 3000;
 const DEV_SECRET_SESSION_KEY = 'precare_dev_secret';
 
 export default function DevPanel() {
-  const [isUnlocked, setIsUnlocked] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [tapTimestamps, setTapTimestamps] = useState([]);
 
-  // Auth
-  const [devSecret, setDevSecret] = useState('');
+  // Auth: prefill default dev secret in development mode for convenience
+  const [devSecret, setDevSecret] = useState(() => {
+    return (
+      sessionStorage.getItem(DEV_SECRET_SESSION_KEY) ||
+      (import.meta.env.DEV ? 'precare-dev-secret-key' : '')
+    );
+  });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authError, setAuthError] = useState('');
 
@@ -33,42 +36,6 @@ export default function DevPanel() {
   const [switching, setSwitching] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
 
-  // Restore dev secret from session
-  useEffect(() => {
-    const stored = sessionStorage.getItem(DEV_SECRET_SESSION_KEY);
-    if (stored) {
-      setDevSecret(stored);
-      setIsAuthenticated(true);
-    }
-  }, []);
-
-  // Handle secret tap activation
-  const handleTap = useCallback(() => {
-    const now = Date.now();
-    setTapTimestamps((prev) => {
-      const recent = [...prev, now].filter((t) => now - t < DEV_TAP_WINDOW_MS);
-      if (recent.length >= DEV_TAP_COUNT) {
-        setIsUnlocked(true);
-        setIsOpen(true);
-        return [];
-      }
-      return recent;
-    });
-  }, []);
-
-  // Keyboard shortcut: Alt + Shift + D (or Option + Shift + D) to toggle DevPanel
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.altKey && e.shiftKey && (e.key === 'D' || e.key === 'd' || e.code === 'KeyD')) {
-        e.preventDefault();
-        setIsUnlocked(true);
-        setIsOpen((prev) => !prev);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
   // Fetch provider info from backend
   const fetchProvider = useCallback(async (secret) => {
     const res = await safeFetch('/api/dev/ai/provider', {
@@ -77,9 +44,39 @@ export default function DevPanel() {
     if (res.ok) {
       setProviderInfo(res);
       setSelectedProvider(res.active || 'openrouter');
+      setIsAuthenticated(true);
     }
     return res;
   }, []);
+
+  // Keyboard shortcuts: F2, Alt + Shift + D, or Ctrl + Shift + X
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Close on Escape
+      if (e.key === 'Escape' && isOpen) {
+        setIsOpen(false);
+        return;
+      }
+
+      const isF2 = e.key === 'F2';
+      const isAltShiftD = e.altKey && e.shiftKey && (e.key === 'D' || e.key === 'd' || e.code === 'KeyD');
+      const isCtrlShiftX = (e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'X' || e.key === 'x' || e.code === 'KeyX');
+
+      if (isF2 || isAltShiftD || isCtrlShiftX) {
+        e.preventDefault();
+        setIsOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
+  // Restore session / auto-authenticate when opened
+  useEffect(() => {
+    if (isOpen && !isAuthenticated && devSecret) {
+      fetchProvider(devSecret);
+    }
+  }, [isOpen, isAuthenticated, devSecret, fetchProvider]);
 
   // Authenticate with dev secret
   const handleAuth = async (e) => {
@@ -152,19 +149,20 @@ export default function DevPanel() {
 
   return (
     <>
-      {/* Developer Access Button — bottom-right corner */}
+      {/* Floating Developer Access Button — 1 click to open */}
       <button
         type="button"
-        className="dev-tap-target"
-        onClick={handleTap}
-        title="Developer Mode (Alt+Shift+D or tap 5 times)"
+        className="dev-floating-btn"
+        onClick={() => setIsOpen((prev) => !prev)}
+        title="Developer Mode (Click to open, or press F2 / Alt+Shift+D)"
         aria-label="Developer Mode"
       >
-        ⚙
+        <span className="dev-floating-icon">⚙️</span>
+        <span className="dev-floating-text">AI Dev</span>
       </button>
 
       {/* Dev Panel Overlay */}
-      {isUnlocked && isOpen && (
+      {isOpen && (
         <div className="dev-panel-overlay" onClick={handleClose}>
           <div className="dev-panel" onClick={(e) => e.stopPropagation()}>
             <div className="dev-panel-header">
