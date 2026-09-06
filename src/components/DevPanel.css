@@ -1,5 +1,6 @@
-/* DevPanel.css — Hidden Developer AI Provider Switch Styles */
+/* DevPanel.css — Developer Mode AI Provider Switch Styles */
 
+/* Developer Trigger Button — bottom-right corner */
 .dev-tap-target {
   position: fixed;
   bottom: 12px;
@@ -7,33 +8,36 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: transparent;
-  border: none;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.25);
   cursor: pointer;
   z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.25;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.dev-tap-target:hover {
-  opacity: 0.8;
-  transform: scale(1.1);
-}
-
-.dev-gear-icon {
-  font-size: 14px;
-  color: #64748b;
+  font-size: 15px;
+  color: #94a3b8;
+  opacity: 0.45;
+  transition: opacity 0.2s ease, transform 0.2s ease, background 0.2s ease;
   user-select: none;
 }
 
+.dev-tap-target:hover {
+  opacity: 1;
+  transform: scale(1.1);
+  background: rgba(15, 23, 42, 0.95);
+  border-color: #38bdf8;
+  color: #38bdf8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+}
+
+/* Modal Overlay */
+.dev-panel-overlay,
 .dev-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.65);
-  backdrop-filter: blur(4px);
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(6px);
   z-index: 10000;
   display: flex;
   align-items: center;
@@ -42,30 +46,36 @@
   animation: devFadeIn 0.2s ease-out;
 }
 
+/* Panel Card */
+.dev-panel,
 .dev-modal-card {
   background: #0f172a;
   border: 1px solid #334155;
-  border-radius: 12px;
+  border-radius: 14px;
   width: 100%;
   max-width: 440px;
   padding: 24px;
   color: #f8fafc;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
   font-family: inherit;
+  box-sizing: border-box;
 }
 
+/* Header */
+.dev-panel-header,
 .dev-modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
   border-bottom: 1px solid #1e293b;
   padding-bottom: 12px;
 }
 
+.dev-panel-title,
 .dev-modal-title {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   font-weight: 600;
   color: #38bdf8;
   display: flex;
@@ -73,68 +83,192 @@
   gap: 8px;
 }
 
+.dev-panel-close,
 .dev-close-btn {
   background: transparent;
   border: none;
   color: #94a3b8;
-  font-size: 18px;
+  font-size: 22px;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  line-height: 1;
 }
 
+.dev-panel-close:hover,
 .dev-close-btn:hover {
-  color: #f1f5f9;
+  color: #f8fafc;
   background: #1e293b;
 }
 
-.dev-modal-body {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.dev-warning-box {
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  color: #fbbf24;
-  font-size: 0.82rem;
-  padding: 10px 12px;
-  border-radius: 6px;
-  line-height: 1.4;
-}
-
+/* Auth Form */
 .dev-auth-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+}
+
+.dev-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #94a3b8;
+  margin-bottom: 4px;
+  display: block;
 }
 
 .dev-input {
   width: 100%;
-  padding: 10px 12px;
+  padding: 10px 14px;
   background: #1e293b;
   border: 1px solid #475569;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #f8fafc;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
 }
 
 .dev-input:focus {
   outline: none;
   border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+}
+
+.dev-error {
+  color: #f87171;
+  font-size: 0.84rem;
+  background: rgba(239, 68, 68, 0.1);
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+/* Content & Sections */
+.dev-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.dev-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dev-radio-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.dev-radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  transition: all 0.2s ease;
+}
+
+.dev-radio:hover {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.05);
+}
+
+.dev-radio input[type="radio"] {
+  accent-color: #38bdf8;
+  cursor: pointer;
+}
+
+/* Badges */
+.dev-badge {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.dev-badge-ok {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.dev-badge-warn {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+/* Current Status Info */
+.dev-current {
+  background: #1e293b;
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+}
+
+.dev-current-label {
+  color: #94a3b8;
+}
+
+.dev-current-value {
+  font-weight: 600;
+}
+
+.dev-current-value.dev-online {
+  color: #38bdf8;
+}
+
+.dev-current-value.dev-local {
+  color: #c084fc;
+}
+
+.dev-detail {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  padding: 0 4px;
+}
+
+.dev-status {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.84rem;
+  background: rgba(56, 189, 248, 0.1);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+/* Action Buttons */
+.dev-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.dev-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
 }
 
 .dev-btn-primary {
-  padding: 10px 16px;
   background: #0284c7;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-weight: 500;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: background 0.15s ease;
+  color: #ffffff;
 }
 
 .dev-btn-primary:hover:not(:disabled) {
@@ -146,127 +280,20 @@
   cursor: not-allowed;
 }
 
-.dev-error-text {
-  color: #f87171;
-  font-size: 0.82rem;
-  margin: 0;
+.dev-btn-secondary {
+  background: #334155;
+  color: #cbd5e1;
 }
 
-.dev-status-card {
-  background: #1e293b;
-  border-radius: 8px;
-  padding: 12px;
-  font-size: 0.85rem;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.dev-status-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.dev-status-label {
-  color: #94a3b8;
-}
-
-.dev-status-value {
-  font-weight: 600;
-  color: #e2e8f0;
-}
-
-.dev-badge {
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.dev-badge-openrouter {
-  background: rgba(56, 189, 248, 0.2);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.4);
-}
-
-.dev-badge-ollama {
-  background: rgba(168, 85, 247, 0.2);
-  color: #c084fc;
-  border: 1px solid rgba(168, 85, 247, 0.4);
-}
-
-.dev-badge-active {
-  background: rgba(34, 197, 94, 0.2);
-  color: #4ade80;
-}
-
-.dev-badge-inactive {
-  background: rgba(239, 68, 68, 0.2);
-  color: #f87171;
-}
-
-.dev-provider-select {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 8px;
-}
-
-.dev-provider-option {
-  border: 1px solid #334155;
-  border-radius: 8px;
-  padding: 12px;
-  background: #1e293b;
-  cursor: pointer;
-  text-align: center;
-  transition: all 0.2s ease;
-}
-
-.dev-provider-option:hover {
-  border-color: #0284c7;
-}
-
-.dev-provider-option.selected {
-  border-color: #38bdf8;
-  background: rgba(56, 189, 248, 0.1);
-}
-
-.dev-provider-name {
-  font-weight: 600;
-  font-size: 0.9rem;
-  margin-bottom: 4px;
-}
-
-.dev-provider-desc {
-  font-size: 0.72rem;
-  color: #94a3b8;
-}
-
-.dev-feedback-msg {
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 0.82rem;
-  margin-top: 8px;
-}
-
-.dev-feedback-msg.success {
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
-  border: 1px solid rgba(34, 197, 94, 0.3);
-}
-
-.dev-feedback-msg.error {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+.dev-btn-secondary:hover:not(:disabled) {
+  background: #475569;
+  color: #f8fafc;
 }
 
 @keyframes devFadeIn {
   from {
     opacity: 0;
-    transform: scale(0.96);
+    transform: scale(0.97);
   }
   to {
     opacity: 1;

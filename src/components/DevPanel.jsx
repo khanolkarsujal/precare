@@ -56,6 +56,19 @@ export default function DevPanel() {
     });
   }, []);
 
+  // Keyboard shortcut: Ctrl + Shift + D (or Cmd + Shift + D) to toggle DevPanel
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+        e.preventDefault();
+        setIsUnlocked(true);
+        setIsOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Fetch provider info from backend
   const fetchProvider = useCallback(async (secret) => {
     const res = await safeFetch('/api/dev/ai/provider', {
@@ -139,13 +152,13 @@ export default function DevPanel() {
 
   return (
     <>
-      {/* Tiny invisible tap target — bottom-right corner */}
+      {/* Developer Access Button — bottom-right corner */}
       <button
         type="button"
         className="dev-tap-target"
         onClick={handleTap}
-        aria-label="Developer access"
-        tabIndex={-1}
+        title="Developer Mode (Ctrl+Shift+D or tap 5 times)"
+        aria-label="Developer Mode"
       >
         ⚙
       </button>
