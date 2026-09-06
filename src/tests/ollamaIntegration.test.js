@@ -41,10 +41,11 @@ async function runTests() {
   assert(Boolean(answerResult.extracted_value), 'qwen3:8b extracted location value');
   assert(Boolean(answerResult.acknowledgement), 'qwen3:8b provided an empathetic acknowledgement');
 
-  // 4. Verification of Endpoint via Vite Backend Middleware
-  console.log('\n--- TEST 4: Verification of /api/ollama/status via Vite Server ---');
+import { apiUrl } from '../services/apiClient.js';
+  // 4. Verification of Endpoint via Backend
+  console.log('\n--- TEST 4: Verification of /api/ollama/status via API Client ---');
   try {
-    const res = await fetch('http://localhost:5173/api/ollama/status');
+    const res = await fetch(apiUrl('/api/ollama/status'));
     const data = await res.json();
     assert(res.status === 200, 'Endpoint /api/ollama/status returns HTTP 200');
     assert(data.ok === true && data.model === 'qwen3:8b', 'Endpoint confirms model is qwen3:8b');
