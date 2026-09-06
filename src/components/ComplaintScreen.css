@@ -1,0 +1,76 @@
+.complaint-screen-header {
+  margin-bottom: 20px;
+}
+
+.patient-context-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--primary-light);
+  border: 1px solid var(--primary-border);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--primary);
+}
+
+.patient-context-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: var(--primary);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.patient-context-text strong {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.textarea-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.char-count {
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+
+.mic-hint-title-row {
+  display: flex;
+  align-items: center;
+}
+
+.mic-notice-toast {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-md);
+  color: #1e40af;
+  font-size: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.4;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

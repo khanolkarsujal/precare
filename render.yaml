@@ -1,0 +1,30 @@
+# ==============================================================================
+# PreCare Render Free Tier Blueprint Specification
+# Free-tier deployable without Docker, Kubernetes, or complex DevOps
+# ==============================================================================
+services:
+  - type: web
+    name: precare-backend
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: AI_PROVIDER
+        value: groq
+      - key: AI_API_BASE
+        value: https://api.groq.com/openai/v1
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_MODEL
+        value: llama-3.1-8b-instant

@@ -1,0 +1,479 @@
+/* ============================================================
+   DoctorCaseView.css
+   Clean, scannable single-patient case detail layout
+   ============================================================ */
+
+.dcv-wrapper {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 0 48px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Top bar */
+.dcv-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 0 20px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.dcv-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-family);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.dcv-back-btn:hover {
+  background: #f1f5f9;
+  color: var(--text-main);
+}
+
+.dcv-topbar-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dcv-status-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+}
+
+.dcv-status-waiting {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.dcv-status-active {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.dcv-status-reviewed {
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.dcv-submitted-meta {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+/* Patient header */
+.dcv-patient-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.dcv-patient-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dcv-patient-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
+}
+
+.dcv-patient-meta {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.dcv-urgent-badge {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-full);
+  padding: 4px 12px;
+  flex-shrink: 0;
+}
+
+/* 2-column body */
+.dcv-body {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 24px;
+  align-items: start;
+}
+
+/* Main column */
+.dcv-main-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Section */
+.dcv-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 20px;
+}
+
+.dcv-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Urgent box */
+.dcv-urgent-box {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.dcv-urgent-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #991b1b;
+  margin-bottom: 6px;
+}
+
+.dcv-urgent-reason {
+  font-size: 13px;
+  color: #7f1d1d;
+  line-height: 1.5;
+}
+
+/* Field grid */
+.dcv-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 20px;
+}
+
+.dcv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dcv-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dcv-capitalize {
+  text-transform: capitalize;
+}
+
+/* Value types */
+.dcv-value {
+  font-size: 14px;
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+.dcv-primary-complaint {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.dcv-not-reported {
+  font-size: 13px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.dcv-denied {
+  font-size: 13px;
+  color: #15803d;
+  font-style: italic;
+}
+
+.dcv-unsure {
+  font-size: 13px;
+  color: #92400e;
+  font-style: italic;
+}
+
+.dcv-severity-pill {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-full);
+  padding: 2px 10px;
+}
+
+/* Transcript */
+.dcv-transcript-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  font-family: var(--font-family);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  gap: 8px;
+}
+
+.dcv-toggle-arrow {
+  font-size: 12px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+.dcv-transcript-box {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.dcv-msg {
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+
+.dcv-msg-ai {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.dcv-msg-patient {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.dcv-msg-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.dcv-msg-header strong {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.dcv-msg-time {
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+
+.dcv-msg-content {
+  font-size: 13px;
+  color: var(--text-main);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+/* Side column — action panel */
+.dcv-side-col {
+  position: sticky;
+  top: 24px;
+}
+
+.dcv-action-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dcv-action-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dcv-action-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.dcv-start-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  font-family: var(--font-family);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 16px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.dcv-start-btn:hover {
+  background: var(--primary-hover);
+}
+
+.dcv-start-btn:active {
+  transform: translateY(1px);
+}
+
+.dcv-in-consultation-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  color: #15803d;
+}
+
+.dcv-action-divider {
+  height: 1px;
+  background: var(--border);
+}
+
+/* Mini patient info */
+.dcv-patient-info-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dcv-mini-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.dcv-mini-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.dcv-mini-label {
+  font-size: 12px;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+.dcv-mini-val {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
+  text-align: right;
+}
+
+/* Disclaimer */
+.dcv-disclaimer {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 28px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  color: var(--text-subtle);
+  line-height: 1.5;
+}
+
+.dcv-disc-icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  color: var(--text-subtle);
+}
+
+.dcv-error {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-muted);
+}
+
+/* Responsive */
+@media (max-width: 780px) {
+  .dcv-body {
+    grid-template-columns: 1fr;
+  }
+
+  .dcv-side-col {
+    position: static;
+    order: -1;
+  }
+
+  .dcv-field-grid {
+    grid-template-columns: 1fr;
+  }
+}

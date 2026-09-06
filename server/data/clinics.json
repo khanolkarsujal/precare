@@ -1,0 +1,50 @@
+[
+  {
+    "id": "demo-clinic-mtpw63tc",
+    "clinicName": "Demo Clinic",
+    "doctorName": "Dr. Test",
+    "email": "testclinic_1788703984804@precare.com",
+    "phone": "+91 98765 43210",
+    "specialization": "General Practice",
+    "location": "Bandra West, Mumbai",
+    "languages": [
+      "English",
+      "Hindi"
+    ],
+    "passwordHash": "cf3984049dd7650a166a96ff9e6f8c5b583e9c11ce468dcd54dc0c6e5232571437c4fa22450105e2b89a9e2a08fe8bd1e8cbd3bd5a72b536fabecdffcf5a86a5",
+    "salt": "4f76b261a98bfc31782280e176c31b03",
+    "createdAt": "2026-09-06T14:13:04.848Z",
+    "updatedAt": "2026-09-06T14:13:04.855Z"
+  },
+  {
+    "id": "second-clinic-mtpw63up",
+    "clinicName": "Second Clinic",
+    "doctorName": "Dr. Second",
+    "email": "second_1788703984881@precare.com",
+    "phone": "+91 99999 11111",
+    "specialization": "",
+    "location": "",
+    "languages": [
+      "English"
+    ],
+    "passwordHash": "674aed94232a6dd3c3389b0e2f0db8e24a204040e4514fb9f3bd7752dda455254710a1a8c6e6488c8c35f056e4580e59b5613b097e578d3592cf4c5c07fc0582",
+    "salt": "bd8794280bedf46fb8a6d48951b9b53c",
+    "createdAt": "2026-09-06T14:13:04.897Z"
+  },
+  {
+    "id": "gold-mtpw7sys",
+    "clinicName": "gold",
+    "doctorName": "silver",
+    "email": "khanolkarsujal@gmail.com",
+    "phone": "2589468479",
+    "specialization": "General Practice",
+    "location": "",
+    "languages": [
+      "English"
+    ],
+    "passwordHash": "e88651204ae1dfa800fe672d0f2640377c7422ba1b21b9b9f44d6ca804e548be717cc09a82b728c66bc36eb361d2ac5a1d327a8d4baf3e2e17a2e736f0259550",
+    "salt": "547449da598f133018134c019cf37aa7",
+    "createdAt": "2026-09-06T14:14:24.100Z",
+    "updatedAt": "2026-09-06T14:14:28.585Z"
+  }
+]

@@ -1,0 +1,11 @@
+# PreCare Backend Production Dependencies (Python)
+# Free-tier deployable on Render, Railway, Fly.io, etc.
+
+fastapi>=0.115.0
+uvicorn>=0.30.0
+pydantic>=2.7.0
+httpx>=0.27.0
+python-dotenv>=1.0.0
+
+# Optional PostgreSQL driver for production (Neon / Supabase / Render Postgres Free Tier)
+psycopg2-binary>=2.9.9

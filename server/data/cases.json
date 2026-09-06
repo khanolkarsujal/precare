@@ -1,0 +1,42 @@
+[
+  {
+    "id": "case-mtpw63tu-vop4",
+    "clinicId": "demo-clinic-mtpw63tc",
+    "status": "Completed",
+    "submittedAt": "2026-09-06T14:13:04.866Z",
+    "submittedTimeLabel": "07:43 PM",
+    "submittedDateLabel": "Sep 6, 2026",
+    "patientData": {
+      "name": "Ananya Sharma",
+      "age": "34",
+      "gender": "female",
+      "language": "english",
+      "complaint": "Headache"
+    },
+    "history": {
+      "chief_complaint": "Headache",
+      "duration": "2 days",
+      "location": "Right side of head",
+      "severity": "7/10"
+    },
+    "conversation": [
+      {
+        "role": "ai",
+        "content": "What brings you in today?"
+      },
+      {
+        "role": "patient",
+        "content": "I have a headache since yesterday. It is on the right side and the pain is 7 out of 10."
+      }
+    ],
+    "doctorNotes": "Patient advised rest, hydration, and paracetamol for acute migraine.",
+    "soap": {
+      "subjective": "Patient reports 7/10 right-sided throbbing headache for 2 days.",
+      "objective": "Neurological exam intact. BP normal.",
+      "assessment": "Tension / mild migraine-type headache.",
+      "plan": "Hydration, analgesic as needed, follow up in 3 days if unresolving."
+    },
+    "doctorEditedHistory": {},
+    "updatedAt": "2026-09-06T14:13:04.921Z"
+  }
+]

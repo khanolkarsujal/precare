@@ -1,0 +1,113 @@
+.welcome-card {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+}
+
+.welcome-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.welcome-icon-wrapper {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.25);
+}
+
+.welcome-hero-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.welcome-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  background-color: var(--primary-light);
+  border: 1px solid var(--primary-border);
+  border-radius: var(--radius-full);
+  padding: 3px 10px;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.welcome-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+  margin-bottom: 10px;
+}
+
+.welcome-description {
+  font-size: 15px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  max-width: 420px;
+}
+
+.welcome-benefits {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 28px;
+  text-align: left;
+}
+
+.benefit-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background-color: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.benefit-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background-color: var(--primary-light);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.benefit-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.benefit-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.benefit-text strong {
+  font-size: 13px;
+  color: var(--text-main);
+}
+
+.benefit-text span {
+  font-size: 12px;
+  color: var(--text-subtle);
+  margin-top: 2px;
+}
+
+.welcome-cta {
+  margin-top: auto;
+}

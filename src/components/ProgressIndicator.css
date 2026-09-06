@@ -1,0 +1,118 @@
+.progress-container {
+  position: relative;
+  margin-bottom: 24px;
+  padding: 4px 6px;
+}
+
+.progress-track {
+  position: absolute;
+  top: 18px;
+  left: 24px;
+  right: 24px;
+  height: 3px;
+  background-color: var(--border);
+  z-index: 1;
+}
+
+.progress-fill {
+  position: absolute;
+  top: 18px;
+  left: 24px;
+  height: 3px;
+  background-color: var(--primary);
+  transition: width 0.3s ease;
+  z-index: 2;
+  max-width: calc(100% - 48px);
+}
+
+.progress-steps {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  z-index: 3;
+}
+
+.step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  flex: 1;
+  max-width: 120px;
+}
+
+.step-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background-color: #ffffff;
+  border: 2px solid var(--border);
+  color: var(--text-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 0 4px var(--bg-page);
+}
+
+.step-check-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.step-current .step-circle {
+  border-color: var(--primary);
+  background-color: var(--primary);
+  color: #ffffff;
+  box-shadow: 0 0 0 4px var(--primary-ring);
+}
+
+.step-completed .step-circle {
+  border-color: var(--primary);
+  background-color: var(--primary-light);
+  color: var(--primary);
+}
+
+.step-label-group {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.step-tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  color: var(--text-subtle);
+}
+
+.step-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.step-current .step-name {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.step-completed .step-name {
+  color: var(--text-main);
+}
+
+@media (max-width: 380px) {
+  .step-name {
+    font-size: 11px;
+  }
+  .step-circle {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+}
