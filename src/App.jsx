@@ -193,51 +193,39 @@ function App() {
   // ROUTE RENDERING
   // ══════════════════════════════════════════════════════════════════════════
 
-  // 1. Landing Page
-  if (currentRoute.view === 'landing') {
-    return (
-      <LandingPage
-        onGetStarted={() => navigate('signup')}
-        onDoctorLogin={() => navigate('login')}
-      />
-    );
-  }
+  const renderCurrentView = () => {
+    // 1. Landing Page
+    if (currentRoute.view === 'landing') {
+      return (
+        <LandingPage
+          onGetStarted={() => navigate('signup')}
+          onDoctorLogin={() => navigate('login')}
+        />
+      );
+    }
 
-  // 2. Clinic Sign Up (/signup)
-  if (currentRoute.view === 'signup') {
-    return (
-      <ClinicSignUp
-        onNavigateToLogin={() => navigate('login')}
-        onNavigateToSetup={() => navigate('onboarding')}
-        onNavigateToHome={() => navigate('landing')}
-      />
-    );
-  }
+    // 2. Clinic Sign Up (/signup)
+    if (currentRoute.view === 'signup') {
+      return (
+        <ClinicSignUp
+          onNavigateToLogin={() => navigate('login')}
+          onNavigateToSetup={() => navigate('onboarding')}
+          onNavigateToHome={() => navigate('landing')}
+        />
+      );
+    }
 
-  // 3. Clinic Setup (/onboarding)
-  if (currentRoute.view === 'onboarding') {
-    return (
-      <ClinicSetup
-        onCompleteSetup={() => navigate('dashboard')}
-      />
-    );
-  }
+    // 3. Clinic Setup (/onboarding)
+    if (currentRoute.view === 'onboarding') {
+      return (
+        <ClinicSetup
+          onCompleteSetup={() => navigate('dashboard')}
+        />
+      );
+    }
 
-  // 4. Clinic Sign In (/login)
-  if (currentRoute.view === 'login') {
-    return (
-      <ClinicLogin
-        onLoginSuccess={() => navigate('dashboard')}
-        onNavigateToSignUp={() => navigate('signup')}
-        onNavigateToHome={() => navigate('landing')}
-      />
-    );
-  }
-
-  // 5. Clinic Dashboard (/dashboard)
-  if (currentRoute.view === 'dashboard') {
-    // If not logged in, redirect to login
-    if (!activeClinic) {
+    // 4. Clinic Sign In (/login)
+    if (currentRoute.view === 'login') {
       return (
         <ClinicLogin
           onLoginSuccess={() => navigate('dashboard')}
@@ -247,170 +235,190 @@ function App() {
       );
     }
 
-    // Inside dashboard, handle sub-screens: queue, case, workspace
-    if (doctorScreen === 'case' && activeCase) {
-      return (
-        <div className="app-container app-container--wide">
-          <header className="app-header">
-            <button
-              type="button"
-              className="brand-badge brand-badge--btn"
-              onClick={handleBackToQueue}
-              title="Return to Clinic Dashboard"
-            >
-              <div className="brand-icon" aria-hidden="true">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 5v14" /><path d="M5 12h14" />
-                </svg>
+    // 5. Clinic Dashboard (/dashboard)
+    if (currentRoute.view === 'dashboard') {
+      // If not logged in, redirect to login
+      if (!activeClinic) {
+        return (
+          <ClinicLogin
+            onLoginSuccess={() => navigate('dashboard')}
+            onNavigateToSignUp={() => navigate('signup')}
+            onNavigateToHome={() => navigate('landing')}
+          />
+        );
+      }
+
+      // Inside dashboard, handle sub-screens: queue, case, workspace
+      if (doctorScreen === 'case' && activeCase) {
+        return (
+          <div className="app-container app-container--wide">
+            <header className="app-header">
+              <button
+                type="button"
+                className="brand-badge brand-badge--btn"
+                onClick={handleBackToQueue}
+                title="Return to Clinic Dashboard"
+              >
+                <div className="brand-icon" aria-hidden="true">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 5v14" /><path d="M5 12h14" />
+                  </svg>
+                </div>
+                <span className="brand-name">PreCare</span>
+              </button>
+              <div className="header-right">
+                <span className="brand-tag brand-tag--doctor">Case Review · {activeClinic.clinicName}</span>
+                <button
+                  type="button"
+                  className="home-nav-btn"
+                  onClick={handleBackToQueue}
+                >
+                  ← Back to Queue
+                </button>
               </div>
-              <span className="brand-name">PreCare</span>
-            </button>
-            <div className="header-right">
-              <span className="brand-tag brand-tag--doctor">Case Review · {activeClinic.clinicName}</span>
+            </header>
+
+            <main id="doctor-main-content">
+              <DoctorCaseView
+                caseId={activeCaseId}
+                caseData={activeCase}
+                onBack={handleBackToQueue}
+                onStartConsultation={handleStartConsultation}
+              />
+            </main>
+          </div>
+        );
+      }
+
+      if (doctorScreen === 'workspace' && activeCase) {
+        return (
+          <div className="app-container app-container--wide">
+            <main id="doctor-main-content">
+              <ConsultationWorkspace
+                caseId={activeCaseId}
+                caseData={activeCase}
+                onComplete={handleConsultationComplete2}
+                onBack={handleBackFromWorkspace}
+              />
+            </main>
+          </div>
+        );
+      }
+
+      // Default: Main Clinic Dashboard
+      return (
+        <ClinicDashboard
+          onOpenCase={handleOpenCase}
+          onSignOut={() => {
+            clinicAuthStore.logout();
+            navigate('login');
+          }}
+          onOpenIntake={(clinicId) => navigate('patient', { clinicId })}
+        />
+      );
+    }
+
+    // 6. Patient Intake (/intake/:clinicId)
+    const patientClinicId = currentRoute.clinicId || activeClinic?.id || 'default-clinic';
+    const clinicDisplay = intakeClinicInfo?.clinicName || (activeClinic?.id === patientClinicId ? activeClinic?.clinicName : 'Clinic Intake');
+    const doctorDisplay = intakeClinicInfo?.doctorName || (activeClinic?.id === patientClinicId ? activeClinic?.doctorName : '');
+
+    return (
+      <div className="app-container">
+        {/* Patient Intake Header */}
+        <header className="app-header">
+          <button
+            type="button"
+            className="brand-badge brand-badge--btn"
+            onClick={() => navigate('landing')}
+            title="PreCare Home"
+          >
+            <div className="brand-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 5v14" /><path d="M5 12h14" />
+              </svg>
+            </div>
+            <span className="brand-name">PreCare</span>
+          </button>
+
+          <div className="header-right">
+            <div className="patient-clinic-tag" title={`Intake for ${clinicDisplay}`}>
+              <span className="patient-clinic-dot" />
+              <strong>{clinicDisplay}</strong>
+              {doctorDisplay && <span className="patient-clinic-doc"> · {doctorDisplay}</span>}
+            </div>
+
+            {activeClinic && (
               <button
                 type="button"
                 className="home-nav-btn"
-                onClick={handleBackToQueue}
+                onClick={() => navigate('dashboard')}
+                title="Return to Clinic Dashboard"
               >
-                ← Back to Queue
+                ← Dashboard
               </button>
-            </div>
-          </header>
+            )}
+          </div>
+        </header>
 
-          <main id="doctor-main-content">
-            <DoctorCaseView
-              caseId={activeCaseId}
-              caseData={activeCase}
-              onBack={handleBackToQueue}
-              onStartConsultation={handleStartConsultation}
+        {/* Patient Flow Progress Indicator */}
+        {currentScreen === 'details' && <ProgressIndicator currentStep={1} />}
+        {currentScreen === 'complaint' && <ProgressIndicator currentStep={2} />}
+        {currentScreen === 'consultation' && <ProgressIndicator currentStep={3} />}
+
+        {/* Patient Screens */}
+        <main id="main-content" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+          {currentScreen === 'welcome' && (
+            <WelcomeScreen onStart={handleStart} />
+          )}
+          {currentScreen === 'details' && (
+            <PatientDetailsForm
+              initialData={patientData}
+              onSubmit={handleDetailsSubmit}
+              onBack={handleBackToWelcome}
             />
-          </main>
-        </div>
-      );
-    }
-
-    if (doctorScreen === 'workspace' && activeCase) {
-      return (
-        <div className="app-container app-container--wide">
-          <main id="doctor-main-content">
-            <ConsultationWorkspace
-              caseId={activeCaseId}
-              caseData={activeCase}
-              onComplete={handleConsultationComplete2}
-              onBack={handleBackFromWorkspace}
+          )}
+          {currentScreen === 'complaint' && (
+            <ComplaintScreen
+              patientInfo={patientData}
+              initialComplaint={patientData.complaint}
+              onSubmit={handleComplaintSubmit}
+              onBack={handleBackToDetails}
             />
-          </main>
-        </div>
-      );
-    }
-
-    // Default: Main Clinic Dashboard
-    return (
-      <ClinicDashboard
-        onOpenCase={handleOpenCase}
-        onSignOut={() => {
-          clinicAuthStore.logout();
-          navigate('login');
-        }}
-        onOpenIntake={(clinicId) => navigate('patient', { clinicId })}
-      />
+          )}
+          {currentScreen === 'consultation' && (
+            <ChatInterface
+              patientInfo={patientData}
+              initialComplaint={patientData.complaint}
+              savedHistory={structuredHistory}
+              savedMessages={conversationTranscript}
+              onComplete={handleConsultationComplete}
+              onBack={handleBackToComplaint}
+            />
+          )}
+          {currentScreen === 'summary' && (
+            <IntakeSummary
+              patientData={patientData}
+              history={structuredHistory}
+              conversation={conversationTranscript}
+              clinicId={patientClinicId}
+              onEdit={handleEditFromSummary}
+              onReset={handleReset}
+              onSubmitToDoctor={() => {
+                // Patient completed submission to clinic
+              }}
+            />
+          )}
+        </main>
+      </div>
     );
-  }
-
-  // 6. Patient Intake (/intake/:clinicId)
-  const patientClinicId = currentRoute.clinicId || activeClinic?.id || 'default-clinic';
-  const clinicDisplay = intakeClinicInfo?.clinicName || (activeClinic?.id === patientClinicId ? activeClinic?.clinicName : 'Clinic Intake');
-  const doctorDisplay = intakeClinicInfo?.doctorName || (activeClinic?.id === patientClinicId ? activeClinic?.doctorName : '');
+  };
 
   return (
-    <div className="app-container">
-      {/* Patient Intake Header */}
-      <header className="app-header">
-        <button
-          type="button"
-          className="brand-badge brand-badge--btn"
-          onClick={() => navigate('landing')}
-          title="PreCare Home"
-        >
-          <div className="brand-icon" aria-hidden="true">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14" /><path d="M5 12h14" />
-            </svg>
-          </div>
-          <span className="brand-name">PreCare</span>
-        </button>
-
-        <div className="header-right">
-          <div className="patient-clinic-tag" title={`Intake for ${clinicDisplay}`}>
-            <span className="patient-clinic-dot" />
-            <strong>{clinicDisplay}</strong>
-            {doctorDisplay && <span className="patient-clinic-doc"> · {doctorDisplay}</span>}
-          </div>
-
-          {activeClinic && (
-            <button
-              type="button"
-              className="home-nav-btn"
-              onClick={() => navigate('dashboard')}
-              title="Return to Clinic Dashboard"
-            >
-              ← Dashboard
-            </button>
-          )}
-        </div>
-      </header>
-
-      {/* Patient Flow Progress Indicator */}
-      {currentScreen === 'details' && <ProgressIndicator currentStep={1} />}
-      {currentScreen === 'complaint' && <ProgressIndicator currentStep={2} />}
-      {currentScreen === 'consultation' && <ProgressIndicator currentStep={3} />}
-
-      {/* Patient Screens */}
-      <main id="main-content" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-        {currentScreen === 'welcome' && (
-          <WelcomeScreen onStart={handleStart} />
-        )}
-        {currentScreen === 'details' && (
-          <PatientDetailsForm
-            initialData={patientData}
-            onSubmit={handleDetailsSubmit}
-            onBack={handleBackToWelcome}
-          />
-        )}
-        {currentScreen === 'complaint' && (
-          <ComplaintScreen
-            patientInfo={patientData}
-            initialComplaint={patientData.complaint}
-            onSubmit={handleComplaintSubmit}
-            onBack={handleBackToDetails}
-          />
-        )}
-        {currentScreen === 'consultation' && (
-          <ChatInterface
-            patientInfo={patientData}
-            initialComplaint={patientData.complaint}
-            savedHistory={structuredHistory}
-            savedMessages={conversationTranscript}
-            onComplete={handleConsultationComplete}
-            onBack={handleBackToComplaint}
-          />
-        )}
-        {currentScreen === 'summary' && (
-          <IntakeSummary
-            patientData={patientData}
-            history={structuredHistory}
-            conversation={conversationTranscript}
-            clinicId={patientClinicId}
-            onEdit={handleEditFromSummary}
-            onReset={handleReset}
-            onSubmitToDoctor={() => {
-              // Patient completed submission to clinic
-            }}
-          />
-        )}
-      </main>
+    <>
+      {renderCurrentView()}
       <DevPanel />
-    </div>
+    </>
   );
 }
 

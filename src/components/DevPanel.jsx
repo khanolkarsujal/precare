@@ -3,31 +3,23 @@ import { safeFetch } from '../services/apiClient.js';
 import './DevPanel.css';
 
 /**
- * DevPanel — Hidden developer-only AI provider switch.
+ * DevPanel — Developer-only AI provider switch.
  *
- * Activation: Click the tiny "⚙" icon 5 times rapidly in the bottom-right corner.
- * Protection: Requires DEV_SECRET (entered once per session, stored only in sessionStorage).
- * Security: Never exposes API keys, database URLs, or passwords.
+ * Position: Top right corner, just below navigation.
+ * Unlock Password: dev
  *
- * The panel sends only a safe provider name ('openrouter' or 'ollama') to the backend.
- * The backend validates the developer secret and switches the runtime AI provider.
+ * Safe provider switcher: communicates provider name to backend,
+ * validated with developer secret.
  */
 
-const DEV_TAP_COUNT = 5;
-const DEV_TAP_WINDOW_MS = 3000;
-const DEV_SECRET_SESSION_KEY = 'precare_dev_secret';
+const DEV_AUTH_SESSION_KEY = 'precare_dev_unlocked';
 
 export default function DevPanel() {
   const [isOpen, setIsOpen] = useState(false);
-
-  // Auth: prefill default dev secret in development mode for convenience
-  const [devSecret, setDevSecret] = useState(() => {
-    return (
-      sessionStorage.getItem(DEV_SECRET_SESSION_KEY) ||
-      (import.meta.env.DEV ? 'precare-dev-secret-key' : '')
-    );
+  const [passwordInput, setPasswordInput] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return sessionStorage.getItem(DEV_AUTH_SESSION_KEY) === 'true';
   });
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authError, setAuthError] = useState('');
 
   // Provider state
@@ -36,33 +28,28 @@ export default function DevPanel() {
   const [switching, setSwitching] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
 
-  // Fetch provider info from backend
-  const fetchProvider = useCallback(async (secret) => {
+  // Fetch provider info from backend with secret 'dev'
+  const fetchProvider = useCallback(async () => {
     const res = await safeFetch('/api/dev/ai/provider', {
-      headers: { 'X-Dev-Secret': secret },
+      headers: { 'X-Dev-Secret': 'dev' },
     });
     if (res.ok) {
       setProviderInfo(res);
       setSelectedProvider(res.active || 'openrouter');
-      setIsAuthenticated(true);
     }
     return res;
   }, []);
 
-  // Keyboard shortcuts: F2, Alt + Shift + D, or Ctrl + Shift + X
+  // Keyboard shortcut: F2 or Alt+Shift+D or Escape
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Close on Escape
       if (e.key === 'Escape' && isOpen) {
         setIsOpen(false);
         return;
       }
-
       const isF2 = e.key === 'F2';
       const isAltShiftD = e.altKey && e.shiftKey && (e.key === 'D' || e.key === 'd' || e.code === 'KeyD');
-      const isCtrlShiftX = (e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'X' || e.key === 'x' || e.code === 'KeyX');
-
-      if (isF2 || isAltShiftD || isCtrlShiftX) {
+      if (isF2 || isAltShiftD) {
         e.preventDefault();
         setIsOpen((prev) => !prev);
       }
@@ -71,37 +58,29 @@ export default function DevPanel() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
 
-  // Restore session / auto-authenticate when opened
+  // When panel is opened and already authenticated, refresh provider info
   useEffect(() => {
-    if (isOpen && !isAuthenticated && devSecret) {
-      fetchProvider(devSecret);
+    if (isOpen && isAuthenticated) {
+      fetchProvider();
     }
-  }, [isOpen, isAuthenticated, devSecret, fetchProvider]);
+  }, [isOpen, isAuthenticated, fetchProvider]);
 
-  // Authenticate with dev secret
-  const handleAuth = async (e) => {
+  // Authenticate with password 'dev'
+  const handleUnlock = async (e) => {
     e.preventDefault();
     setAuthError('');
-    const trimmed = devSecret.trim();
-    if (!trimmed) {
-      setAuthError('Enter a developer secret.');
+    const trimmed = passwordInput.trim();
+    if (trimmed !== 'dev') {
+      setAuthError('Incorrect password. Password is: dev');
       return;
     }
-    const res = await fetchProvider(trimmed);
-    if (res.ok) {
-      setIsAuthenticated(true);
-      sessionStorage.setItem(DEV_SECRET_SESSION_KEY, trimmed);
-    } else {
-      setAuthError(res.error || 'Invalid developer secret.');
-    }
-  };
 
-  // Fetch provider on authenticated panel open
-  useEffect(() => {
-    if (isOpen && isAuthenticated && devSecret) {
-      fetchProvider(devSecret);
-    }
-  }, [isOpen, isAuthenticated, devSecret, fetchProvider]);
+    // Password is 'dev' -> Unlock!
+    setIsAuthenticated(true);
+    sessionStorage.setItem(DEV_AUTH_SESSION_KEY, 'true');
+    setPasswordInput('');
+    await fetchProvider();
+  };
 
   // Switch provider
   const handleSwitch = async () => {
@@ -109,7 +88,7 @@ export default function DevPanel() {
     setStatusMsg('');
     const res = await safeFetch('/api/dev/ai/provider', {
       method: 'POST',
-      headers: { 'X-Dev-Secret': devSecret },
+      headers: { 'X-Dev-Secret': 'dev' },
       body: JSON.stringify({ provider: selectedProvider }),
     });
     setSwitching(false);
@@ -127,62 +106,81 @@ export default function DevPanel() {
     setStatusMsg('');
     const res = await safeFetch('/api/dev/ai/provider/reset', {
       method: 'POST',
-      headers: { 'X-Dev-Secret': devSecret },
+      headers: { 'X-Dev-Secret': 'dev' },
     });
     setSwitching(false);
     if (res.ok) {
       setProviderInfo(res);
       setSelectedProvider(res.active || res.default || 'openrouter');
-      setStatusMsg('Reset to environment default.');
+      setStatusMsg('Reset to default.');
     } else {
       setStatusMsg(res.error || 'Reset failed.');
     }
+  };
+
+  // Lock Dev Mode
+  const handleLock = () => {
+    setIsAuthenticated(false);
+    sessionStorage.removeItem(DEV_AUTH_SESSION_KEY);
+    setStatusMsg('');
+    setPasswordInput('');
   };
 
   // Close panel
   const handleClose = () => {
     setIsOpen(false);
     setStatusMsg('');
+    setAuthError('');
   };
 
   const activeLabel = providerInfo?.active === 'local' ? 'Local Ollama' : 'Online API (OpenRouter)';
 
   return (
     <>
-      {/* Floating Developer Access Button — 1 click to open */}
+      {/* Dev Mode Button — Top-Right Corner Below Navigation */}
       <button
         type="button"
-        className="dev-floating-btn"
+        id="dev-mode-toggle-btn"
+        className="dev-mode-btn-top"
         onClick={() => setIsOpen((prev) => !prev)}
-        title="Developer Mode (Click to open, or press F2 / Alt+Shift+D)"
+        title="Developer Mode (Password: dev)"
         aria-label="Developer Mode"
       >
-        <span className="dev-floating-icon">⚙️</span>
-        <span className="dev-floating-text">AI Dev</span>
+        <span className="dev-mode-icon">🛠️</span>
+        <span className="dev-mode-text">Dev Mode</span>
+        {isAuthenticated && <span className="dev-mode-unlocked-dot" title="Dev Mode Unlocked" />}
       </button>
 
-      {/* Dev Panel Overlay */}
+      {/* Dev Panel Modal Overlay */}
       {isOpen && (
         <div className="dev-panel-overlay" onClick={handleClose}>
           <div className="dev-panel" onClick={(e) => e.stopPropagation()}>
             <div className="dev-panel-header">
-              <span className="dev-panel-title">Developer Mode</span>
+              <span className="dev-panel-title">
+                🛠️ Developer Mode
+                {isAuthenticated && <span className="dev-badge dev-badge-ok">Unlocked</span>}
+              </span>
               <button type="button" className="dev-panel-close" onClick={handleClose}>×</button>
             </div>
 
             {!isAuthenticated ? (
-              <form className="dev-auth-form" onSubmit={handleAuth}>
-                <label className="dev-label">Dev Secret</label>
+              <form className="dev-auth-form" onSubmit={handleUnlock}>
+                <div className="dev-warning-box">
+                  🔒 Enter password to unlock Developer Mode.
+                </div>
+                <label className="dev-label" htmlFor="dev-password-input">Password</label>
                 <input
+                  id="dev-password-input"
                   type="password"
                   className="dev-input"
-                  value={devSecret}
-                  onChange={(e) => setDevSecret(e.target.value)}
-                  placeholder="Enter developer secret..."
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  placeholder="Enter dev password (dev)"
                   autoComplete="off"
+                  autoFocus
                 />
                 {authError && <div className="dev-error">{authError}</div>}
-                <button type="submit" className="dev-btn dev-btn-primary">Authenticate</button>
+                <button type="submit" className="dev-btn dev-btn-primary">Unlock</button>
               </form>
             ) : (
               <div className="dev-content">
@@ -197,9 +195,9 @@ export default function DevPanel() {
                         checked={selectedProvider === 'openrouter'}
                         onChange={() => setSelectedProvider('openrouter')}
                       />
-                      <span>Online API</span>
+                      <span>Online API (OpenRouter)</span>
                       {providerInfo?.openrouter?.configured && (
-                        <span className="dev-badge dev-badge-ok">configured</span>
+                        <span className="dev-badge dev-badge-ok">ready</span>
                       )}
                     </label>
                     <label className="dev-radio">
@@ -253,6 +251,14 @@ export default function DevPanel() {
                       Reset
                     </button>
                   )}
+                  <button
+                    type="button"
+                    className="dev-btn dev-btn-lock"
+                    onClick={handleLock}
+                    title="Lock Dev Mode"
+                  >
+                    Lock
+                  </button>
                 </div>
               </div>
             )}
