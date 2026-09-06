@@ -167,3 +167,12 @@ export function getNextQuestion(history, totalQuestionsAsked = 0) {
     fieldLabel: nextField.label,
   };
 }
+
+export default {
+  detectCategory,
+  getCategoryConfig,
+  isFieldCollected,
+  getMissingFields,
+  isHistoryComplete,
+  getNextQuestion,
+};

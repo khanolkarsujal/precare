@@ -103,22 +103,38 @@ class AIService {
     const history = {
       chief_complaint: trimmed,
       category,
-      duration: extractedData.duration || 'Not reported',
-      location: extractedData.location || 'Not reported',
-      severity: extractedData.severity || 'Not reported',
+      duration: extractedData.duration || null,
+      location: extractedData.location || null,
+      severity: extractedData.severity || null,
+      symptoms: [trimmed],
       associated_symptoms: {},
+      medical_history: null,
+      medications: null,
+      allergies: null,
       red_flags: urgency.isUrgent ? [urgency.reason] : [],
+      is_urgent: urgency.isUrgent,
+      urgent_reason: urgency.reason,
       extra_notes: '',
     };
 
     const firstQuestion = getNextQuestion(history, 0);
 
-    return {
-      history,
-      urgency,
-      category,
-      firstQuestion,
-    };
+    // Provide both flat history access and metadata compatibility
+    history.history = history;
+    history.urgency = urgency;
+    history.firstQuestion = firstQuestion;
+
+    return history;
+  }
+
+  /**
+   * Select next adaptive question using clinical flow rules.
+   * @param {Object} historyState
+   * @param {number} totalQuestionsAsked
+   * @returns {Promise<{ isComplete: boolean, targetField: string|null, question: string, fieldLabel?: string }>}
+   */
+  async getNextQuestion(historyState, totalQuestionsAsked = 0) {
+    return getNextQuestion(historyState, totalQuestionsAsked);
   }
 
   /**
@@ -192,8 +208,8 @@ class AIService {
     }
 
     const currentTurn =
-      Object.keys(updatedHistory.associated_symptoms).length +
-      (updatedHistory.severity !== 'Not reported' ? 1 : 0);
+      Object.keys(updatedHistory.associated_symptoms || {}).length +
+      (updatedHistory.severity && updatedHistory.severity !== 'Not reported' ? 1 : 0);
 
     const nextQuestion = getNextQuestion(updatedHistory, currentTurn);
 
@@ -206,5 +222,7 @@ class AIService {
   }
 }
 
+export { getNextQuestion, detectCategory };
 export const aiService = new AIService();
 export default aiService;
+

@@ -12,11 +12,12 @@
 
 const FALLBACK_PRODUCTION_API = 'https://precare-1.onrender.com';
 
-const RAW_BASE = (import.meta.env.VITE_API_URL || '').trim();
+const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : (typeof process !== 'undefined' && process.env ? process.env : {});
+const RAW_BASE = (env.VITE_API_URL || '').trim();
 
 export const API_BASE_URL = RAW_BASE
   ? RAW_BASE.replace(/\/+$/, '')
-  : (import.meta.env.DEV ? '' : FALLBACK_PRODUCTION_API);
+  : (env.DEV ? '' : FALLBACK_PRODUCTION_API);
 
 /**
  * Constructs the absolute URL for any API endpoint.

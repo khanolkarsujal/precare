@@ -27,10 +27,18 @@ from .ai_service import (
     check_ai_status,
     analyze_complaint_with_ai,
     extract_answer_with_ai,
+    get_provider_info,
+    set_runtime_provider,
+    reset_runtime_provider,
+    get_active_provider,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("precare.main")
+
+# Developer mode secret — must be set in environment to enable dev endpoints.
+# NEVER hardcode a real secret here. Set DEV_SECRET in .env (local) or Render env vars.
+DEV_SECRET = (os.getenv("DEV_SECRET") or "").strip()
 
 app = FastAPI(
     title="PreCare API",
@@ -142,6 +150,56 @@ async def analyze_complaint(req: AnalyzeComplaintRequest):
 async def extract_answer(req: ExtractAnswerRequest):
     result = await extract_answer_with_ai(req.patientAnswer, req.targetField)
     return {"ok": True, "data": result}
+
+# -----------------------------------------------------------------------------
+# Developer-Only AI Provider Switch (Protected by DEV_SECRET)
+# -----------------------------------------------------------------------------
+class DevProviderSwitch(BaseModel):
+    provider: str  # 'openrouter' or 'ollama'
+
+
+def _verify_dev_secret(request: Request):
+    """Verify the developer secret from the X-Dev-Secret header."""
+    if not DEV_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"ok": False, "error": "Developer mode is not enabled on this server."},
+        )
+    client_secret = (request.headers.get("X-Dev-Secret") or "").strip()
+    if not client_secret or client_secret != DEV_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"ok": False, "error": "Invalid developer secret."},
+        )
+
+
+@app.get("/api/dev/ai/provider")
+def dev_get_provider(request: Request):
+    """Get current AI provider info. Developer-only. No secrets exposed."""
+    _verify_dev_secret(request)
+    return {"ok": True, **get_provider_info()}
+
+
+@app.post("/api/dev/ai/provider")
+def dev_set_provider(req: DevProviderSwitch, request: Request):
+    """Switch the active AI provider at runtime. Developer-only."""
+    _verify_dev_secret(request)
+    try:
+        new_provider = set_runtime_provider(req.provider)
+        return {"ok": True, "active": new_provider, **get_provider_info()}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"ok": False, "error": str(e)},
+        )
+
+
+@app.post("/api/dev/ai/provider/reset")
+def dev_reset_provider(request: Request):
+    """Reset AI provider to environment default. Developer-only."""
+    _verify_dev_secret(request)
+    reset_runtime_provider()
+    return {"ok": True, "message": "Provider reset to environment default.", **get_provider_info()}
 
 # -----------------------------------------------------------------------------
 # Clinic Auth Endpoints

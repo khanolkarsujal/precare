@@ -14,6 +14,7 @@ import ClinicLogin from './components/ClinicLogin';
 import ClinicDashboard from './components/ClinicDashboard';
 import caseStore from './services/caseStore';
 import clinicAuthStore from './services/clinicAuthStore';
+import DevPanel from './components/DevPanel';
 import './App.css';
 
 /**
@@ -408,6 +409,7 @@ function App() {
           />
         )}
       </main>
+      <DevPanel />
     </div>
   );
 }

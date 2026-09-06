@@ -15,10 +15,16 @@ logger = logging.getLogger("precare.ai")
 # -----------------------------------------------------------------------------
 # AI Provider Configuration
 # -----------------------------------------------------------------------------
-# Options:
-#   "openrouter" / "api" -> Cloud AI API via OpenRouter (DEFAULT)
-#   "ollama" / "local"    -> Local Ollama instance (qwen3:8b)
+# Production default: "openrouter" (Online AI via OpenRouter)
+# Developer/testing: "ollama" (Local Ollama instance)
+#
+# The provider is determined by the AI_PROVIDER environment variable.
+# A runtime override can be set via the developer API for testing purposes.
+# -----------------------------------------------------------------------------
+
+# Read environment configuration
 RAW_PROVIDER = (os.getenv("AI_PROVIDER") or "").strip().lower()
+ENVIRONMENT = (os.getenv("ENVIRONMENT") or "development").strip().lower()
 
 # Online API configuration (Accepts OPENROUTER_API_KEY or AI_API_KEY)
 AI_API_BASE = (os.getenv("AI_API_BASE") or "https://openrouter.ai/api/v1").rstrip('/')
@@ -29,30 +35,98 @@ AI_MODEL = (os.getenv("OPENROUTER_MODEL") or os.getenv("AI_MODEL") or "meta-llam
 OLLAMA_BASE_URL = (os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434").rstrip('/')
 OLLAMA_MODEL = (os.getenv("OLLAMA_MODEL") or "qwen3:8b").strip()
 
-# Determine active provider
+# Determine default provider from environment
 if RAW_PROVIDER in ("ollama", "local"):
-    AI_PROVIDER = "local"
+    _DEFAULT_PROVIDER = "local"
 elif RAW_PROVIDER in ("openrouter", "api", "groq") or AI_API_KEY:
-    AI_PROVIDER = "openrouter"
+    _DEFAULT_PROVIDER = "openrouter"
 else:
-    AI_PROVIDER = "openrouter"
+    # Production default: always use OpenRouter online
+    _DEFAULT_PROVIDER = "openrouter"
+
+# Runtime override (set via developer API, defaults to None = use _DEFAULT_PROVIDER)
+_runtime_provider_override: Optional[str] = None
+
+
+# -----------------------------------------------------------------------------
+# Provider State Management (for developer testing)
+# -----------------------------------------------------------------------------
+def get_active_provider() -> str:
+    """Return the currently active AI provider name ('openrouter' or 'local')."""
+    if _runtime_provider_override is not None:
+        return _runtime_provider_override
+    return _DEFAULT_PROVIDER
+
+
+def set_runtime_provider(provider: str) -> str:
+    """
+    Set a runtime provider override for developer testing.
+    Valid values: 'openrouter', 'local' (ollama).
+    Returns the new active provider name.
+    """
+    global _runtime_provider_override
+    normalized = provider.strip().lower()
+    if normalized in ("openrouter", "api", "online"):
+        _runtime_provider_override = "openrouter"
+    elif normalized in ("ollama", "local"):
+        _runtime_provider_override = "local"
+    else:
+        raise ValueError(f"Unknown AI provider: '{provider}'. Use 'openrouter' or 'ollama'.")
+    logger.info(f"[AI] Runtime provider override set to: {_runtime_provider_override}")
+    return _runtime_provider_override
+
+
+def reset_runtime_provider():
+    """Clear the runtime override; revert to environment default."""
+    global _runtime_provider_override
+    _runtime_provider_override = None
+    logger.info(f"[AI] Runtime provider override cleared. Using default: {_DEFAULT_PROVIDER}")
 
 
 def _is_local_provider() -> bool:
-    return AI_PROVIDER == "local"
+    return get_active_provider() == "local"
 
 
-def _clean_json_content(raw: str) -> str:
+def get_provider_info() -> Dict[str, Any]:
+    """Return safe provider info for the developer panel (no secrets)."""
+    active = get_active_provider()
+    return {
+        "active": active,
+        "default": _DEFAULT_PROVIDER,
+        "isOverridden": _runtime_provider_override is not None,
+        "environment": ENVIRONMENT,
+        "openrouter": {
+            "configured": bool(AI_API_KEY),
+            "model": AI_MODEL,
+            # NEVER expose AI_API_KEY
+        },
+        "ollama": {
+            "baseUrl": OLLAMA_BASE_URL,
+            "model": OLLAMA_MODEL,
+        },
+    }
+
+
+def _clean_json_content(raw: Optional[str]) -> str:
     """Strip markdown code blocks or conversational text to extract pure JSON."""
-    raw = raw.strip()
+    if not raw:
+        return "{}"
+    raw = str(raw).strip()
     match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', raw)
     if match:
-        return match.group(1).strip()
+        raw = match.group(1).strip()
+    # If not full JSON, search for the outer-most { ... }
+    json_match = re.search(r'(\{[\s\S]*\})', raw)
+    if json_match:
+        return json_match.group(1).strip()
     return raw
 
 
+# -----------------------------------------------------------------------------
+# AI Status Check
+# -----------------------------------------------------------------------------
 async def check_ai_status() -> Dict[str, Any]:
-    """Check status of either local Ollama or the online OpenRouter API."""
+    """Check status of the currently active AI provider."""
     if _is_local_provider():
         try:
             async with httpx.AsyncClient(timeout=3.0) as client:
@@ -108,7 +182,10 @@ async def check_ai_status() -> Dict[str, Any]:
     }
 
 
-async def _execute_online_api_call(task_name: str, messages: List[Dict[str, str]], max_tokens: int = 80) -> Optional[Dict[str, Any]]:
+# -----------------------------------------------------------------------------
+# OpenRouter Online API Call
+# -----------------------------------------------------------------------------
+async def _execute_online_api_call(task_name: str, messages: List[Dict[str, str]], max_tokens: int = 300) -> Optional[Dict[str, Any]]:
     """Execute JSON chat completion against OpenRouter API."""
     if not AI_API_KEY:
         logger.warning("[AI API] OPENROUTER_API_KEY is not configured.")
@@ -129,13 +206,16 @@ async def _execute_online_api_call(task_name: str, messages: List[Dict[str, str]
     }
 
     try:
-        async with httpx.AsyncClient(timeout=12.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             res = await client.post(f"{AI_API_BASE}/chat/completions", headers=headers, json=payload)
             if res.status_code != 200:
                 logger.error(f"[AI API] Request failed: HTTP {res.status_code} - {res.text}")
                 return None
             data = res.json()
-            raw_content = data["choices"][0]["message"]["content"]
+            choice_msg = data.get("choices", [{}])[0].get("message", {})
+            raw_content = choice_msg.get("content")
+            if not raw_content and choice_msg.get("reasoning"):
+                raw_content = choice_msg.get("reasoning")
             clean_content = _clean_json_content(raw_content)
             return json.loads(clean_content)
     except Exception as e:
@@ -143,6 +223,9 @@ async def _execute_online_api_call(task_name: str, messages: List[Dict[str, str]
         return None
 
 
+# -----------------------------------------------------------------------------
+# Local Ollama Call
+# -----------------------------------------------------------------------------
 async def _execute_ollama_call(task_name: str, messages: List[Dict[str, str]], max_tokens: int = 80) -> Optional[Dict[str, Any]]:
     """Execute local Ollama call with think=False and token cap."""
     try:
@@ -172,12 +255,45 @@ async def _execute_ollama_call(task_name: str, messages: List[Dict[str, str]], m
         return None
 
 
+# -----------------------------------------------------------------------------
+# Unified AI Call Router
+# -----------------------------------------------------------------------------
 async def execute_ai_call(task_name: str, messages: List[Dict[str, str]], max_tokens: int = 80) -> Optional[Dict[str, Any]]:
-    """Route AI inference to either local Ollama or OpenRouter online API."""
+    """
+    Route AI inference to the currently active provider.
+    NO automatic fallback from OpenRouter → Ollama in production.
+    If the active provider fails, return None (heuristic fallback handles it upstream).
+    """
     if _is_local_provider():
         return await _execute_ollama_call(task_name, messages, max_tokens)
     else:
         return await _execute_online_api_call(task_name, messages, max_tokens)
+
+
+# -----------------------------------------------------------------------------
+# High-Level AI Functions (used by main.py endpoints)
+# -----------------------------------------------------------------------------
+def _heuristic_category(text: str) -> str:
+    lower = text.lower()
+    if any(w in lower for w in ["stomach", "abdom", "belly", "tummy", "cramp", "digest", "gut"]):
+        return "abdominal_pain"
+    if any(w in lower for w in ["head", "migraine"]):
+        return "headache"
+    if any(w in lower for w in ["fever", "temp", "chills", "sweat"]):
+        return "fever"
+    if any(w in lower for w in ["chest", "breath", "cough", "wheez", "lung", "throat"]):
+        return "chest_respiratory"
+    return "general"
+
+
+def _heuristic_duration(text: str) -> Optional[str]:
+    m = re.search(r'(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s*(days?|weeks?|months?|hours?|years?)', text, re.IGNORECASE)
+    if m:
+        num = m.group(1).lower()
+        word_to_num = {'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9', 'ten': '10'}
+        unit = m.group(2).lower()
+        return f"{word_to_num.get(num, num)} {unit}"
+    return None
 
 
 async def analyze_complaint_with_ai(complaint: str) -> Dict[str, Any]:
@@ -196,22 +312,17 @@ async def analyze_complaint_with_ai(complaint: str) -> Dict[str, Any]:
         {"role": "user", "content": user_prompt},
     ]
 
-    parsed = await execute_ai_call("analyze-complaint", messages, 80)
-    if not parsed:
-        # Heuristic fallback if AI service is offline
-        return {
-            "category": "general",
-            "duration": None,
-            "location": None,
-            "severity": None,
-            "note": "Fallback heuristic used",
-        }
+    parsed = await execute_ai_call("analyze-complaint", messages, 300)
+    category = (parsed.get("category") if parsed else None) or _heuristic_category(complaint)
+    duration = (parsed.get("duration") if parsed else None) or _heuristic_duration(complaint)
+    location = parsed.get("location") if parsed else None
+    severity = parsed.get("severity") if parsed else None
 
     return {
-        "category": parsed.get("category", "general"),
-        "duration": parsed.get("duration"),
-        "location": parsed.get("location"),
-        "severity": parsed.get("severity"),
+        "category": category,
+        "duration": duration,
+        "location": location,
+        "severity": severity,
     }
 
 
@@ -231,14 +342,25 @@ async def extract_answer_with_ai(patient_answer: str, target_field: str) -> Dict
         {"role": "user", "content": user_prompt},
     ]
 
-    parsed = await execute_ai_call("extract-answer", messages, 70)
-    if not parsed:
-        return {
-            "extracted_value": patient_answer,
-            "acknowledgement": "Thank you, noted.",
-        }
+    parsed = await execute_ai_call("extract-answer", messages, 200)
+    trimmed = patient_answer.strip()
+    extracted_val = parsed.get("extracted_value") if parsed else None
+    acknowledgement = (parsed.get("acknowledgement") if parsed else None) or "Thank you, noted."
+
+    if not extracted_val or extracted_val == trimmed:
+        if re.match(r'^(no|nope|not really|none|nil|negative|never)$', trimmed, re.IGNORECASE):
+            extracted_val = "Denied (No)"
+        elif re.match(r'^(yes|yeah|yep|sure|correct|true)$', trimmed, re.IGNORECASE):
+            extracted_val = "Confirmed (Yes)"
+        elif re.match(r'^\d+$', trimmed):
+            extracted_val = f"{trimmed}/10"
+        elif "don't know" in trimmed.lower() or "not sure" in trimmed.lower() or "unsure" in trimmed.lower():
+            extracted_val = "Uncertain / Patient unsure"
+        else:
+            extracted_val = trimmed
 
     return {
-        "extracted_value": parsed.get("extracted_value", patient_answer),
-        "acknowledgement": parsed.get("acknowledgement", "Thank you, noted."),
+        "extracted_value": extracted_val,
+        "acknowledgement": acknowledgement,
     }
+

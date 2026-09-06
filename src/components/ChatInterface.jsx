@@ -3,6 +3,7 @@ import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import CollectedInformation from './CollectedInformation';
 import aiService from '../services/aiService';
+import { getNextQuestion } from '../services/questionEngine';
 import './ChatInterface.css';
 
 /**
@@ -86,7 +87,7 @@ export default function ChatInterface({
       setHistory(initialHistory);
 
       // 4. Determine first follow-up question
-      const nextStep = await aiService.getNextQuestion(initialHistory, 0);
+      const nextStep = getNextQuestion(initialHistory, 0);
 
       // 5. Formulate opening AI greeting and first question
       let openingContent = '';
@@ -162,7 +163,7 @@ export default function ChatInterface({
       setQuestionCount(nextCount);
 
       // 2. Select next adaptive question
-      const nextStep = await aiService.getNextQuestion(
+      const nextStep = getNextQuestion(
         updatedHistory,
         nextCount
       );
