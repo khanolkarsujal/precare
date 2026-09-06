@@ -1,12 +1,13 @@
 /**
  * clinicAuthStore.js
  *
- * Client-side authentication and clinic session management.
- * Manages active clinic profile and cryptographic Bearer session tokens in sessionStorage.
- * Never stores passwords or sensitive credentials.
+ * Client-side authentication and clinic session management for PreCare SaaS.
+ * Manages active clinic profile and cryptographic Bearer session tokens.
+ * Persists session safely across browser refreshes.
+ * Never stores passwords or sensitive database credentials.
  */
 
-import { apiUrl } from './apiClient.js';
+import { safeFetch } from './apiClient.js';
 
 const STORAGE_KEY = 'precare_active_clinic';
 const TOKEN_KEY = 'precare_auth_token';
@@ -33,8 +34,9 @@ function setSession(clinic, token) {
   _activeClinic = clinic ? { ...clinic } : null;
   try {
     if (clinic) {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(clinic));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(clinic));
+      const clinicStr = JSON.stringify(clinic);
+      sessionStorage.setItem(STORAGE_KEY, clinicStr);
+      localStorage.setItem(STORAGE_KEY, clinicStr);
     } else {
       sessionStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(STORAGE_KEY);
@@ -42,8 +44,10 @@ function setSession(clinic, token) {
 
     if (token) {
       sessionStorage.setItem(TOKEN_KEY, token);
+      localStorage.setItem(TOKEN_KEY, token);
     } else if (clinic === null) {
       sessionStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(TOKEN_KEY);
     }
   } catch (e) {
     console.error('[clinicAuthStore] Error updating storage:', e);
@@ -70,10 +74,10 @@ export const clinicAuthStore = {
     return _activeClinic ? { ..._activeClinic } : null;
   },
 
-  /** Get the active authentication token from sessionStorage */
+  /** Get the active authentication token (checked across session and local storage) */
   getToken() {
     try {
-      return sessionStorage.getItem(TOKEN_KEY) || '';
+      return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || '';
     } catch {
       return '';
     }
@@ -86,72 +90,60 @@ export const clinicAuthStore = {
   },
 
   /**
-   * Register a new clinic account.
+   * Register a new clinic account against the deployed backend.
    */
   async signup({ clinicName, doctorName, email, phone, password }) {
-    try {
-      const res = await fetch(apiUrl('/api/auth/signup'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clinicName, doctorName, email, phone, password }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        return { ok: false, error: data.error || (data.detail && data.detail.error) || 'Signup failed. Please try again.' };
-      }
-      setSession(data.clinic, data.token);
-      return { ok: true, clinic: data.clinic, token: data.token };
-    } catch (err) {
-      return { ok: false, error: err.message || 'Network error during signup.' };
+    const res = await safeFetch('/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ clinicName, doctorName, email, phone, password }),
+    });
+
+    if (!res.ok) {
+      return { ok: false, error: res.error || 'Signup failed. Please try again.' };
     }
+
+    setSession(res.clinic, res.token);
+    return { ok: true, clinic: res.clinic, token: res.token };
   },
 
   /**
-   * Log in to an existing clinic account.
+   * Log in to an existing clinic account against the deployed backend.
    */
   async login(email, password) {
-    try {
-      const res = await fetch(apiUrl('/api/auth/login'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        return { ok: false, error: data.error || (data.detail && data.detail.error) || 'Invalid credentials.' };
-      }
-      setSession(data.clinic, data.token);
-      return { ok: true, clinic: data.clinic, token: data.token };
-    } catch (err) {
-      return { ok: false, error: err.message || 'Network error during login.' };
+    const res = await safeFetch('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!res.ok) {
+      return { ok: false, error: res.error || 'Invalid email or password.' };
     }
+
+    setSession(res.clinic, res.token);
+    return { ok: true, clinic: res.clinic, token: res.token };
   },
 
   /**
    * Update clinic profile (specialization, location, languages, etc.)
    */
   async updateClinic(clinicId, updates) {
-    try {
-      const res = await fetch(apiUrl(`/api/clinics/${clinicId}`), {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...this.getAuthHeaders(),
-        },
-        body: JSON.stringify(updates),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        if (res.status === 401) {
-          this.handleAuthExpired();
-        }
-        return { ok: false, error: data.error || (data.detail && data.detail.error) || 'Failed to update clinic profile.' };
+    const res = await safeFetch(`/api/clinics/${clinicId}`, {
+      method: 'PUT',
+      headers: {
+        ...this.getAuthHeaders(),
+      },
+      body: JSON.stringify(updates),
+    });
+
+    if (!res.ok) {
+      if (res.status === 401) {
+        this.handleAuthExpired();
       }
-      setSession(data.clinic);
-      return { ok: true, clinic: data.clinic };
-    } catch (err) {
-      return { ok: false, error: err.message || 'Network error during update.' };
+      return { ok: false, error: res.error || 'Failed to update clinic profile.' };
     }
+
+    setSession(res.clinic);
+    return { ok: true, clinic: res.clinic };
   },
 
   /**
@@ -159,15 +151,12 @@ export const clinicAuthStore = {
    */
   async getClinicById(clinicId) {
     if (!clinicId) return null;
-    try {
-      const res = await fetch(apiUrl(`/api/clinics/${clinicId}`));
-      const data = await res.json();
-      if (res.ok && data.ok) {
-        return data.clinic;
-      }
-    } catch (e) {
-      console.warn('[clinicAuthStore] Error fetching clinic by ID:', e);
+
+    const res = await safeFetch(`/api/clinics/${clinicId}`);
+    if (res.ok && res.clinic) {
+      return res.clinic;
     }
+
     // Fallback if local session matches
     if (_activeClinic && _activeClinic.id === clinicId) {
       return _activeClinic;
@@ -179,7 +168,9 @@ export const clinicAuthStore = {
   handleAuthExpired() {
     console.warn('[clinicAuthStore] Session expired or invalid. Logging out.');
     this.logout();
-    window.dispatchEvent(new CustomEvent('precare:auth-expired'));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('precare:auth-expired'));
+    }
   },
 
   /** Log out active clinic */

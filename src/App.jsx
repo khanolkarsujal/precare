@@ -106,8 +106,11 @@ function App() {
   const [doctorScreen, setDoctorScreen] = useState('queue'); // 'queue' | 'case' | 'workspace'
   const [activeCaseId, setActiveCaseId] = useState(null);
 
-  // Subscribe to caseStore
+  // Subscribe to caseStore and sync from backend
   useEffect(() => {
+    if (activeClinic?.id) {
+      caseStore.syncClinicCases(activeClinic.id);
+    }
     const unsub = caseStore.subscribe((all) => {
       if (activeClinic?.id) {
         setCases(all.filter((c) => c.clinicId === activeClinic.id));
@@ -117,6 +120,13 @@ function App() {
     });
     return unsub;
   }, [activeClinic?.id]);
+
+  // If a case is opened, ensure fresh data from server
+  useEffect(() => {
+    if (activeCaseId && activeClinic?.id) {
+      caseStore.fetchCaseById(activeCaseId);
+    }
+  }, [activeCaseId, activeClinic?.id]);
 
   const activeCase = activeCaseId
     ? cases.find((c) => c.id === activeCaseId) ?? null

@@ -16,22 +16,30 @@ logger = logging.getLogger("precare.ai")
 # AI Provider Configuration
 # -----------------------------------------------------------------------------
 # Options:
-#   "api"   -> Cloud AI API via OpenRouter / OpenAI-compatible provider (DEFAULT)
-#   "local" -> Local Ollama instance (qwen3:8b)
-AI_PROVIDER = os.getenv("AI_PROVIDER", "api").lower()
+#   "openrouter" / "api" -> Cloud AI API via OpenRouter (DEFAULT)
+#   "ollama" / "local"    -> Local Ollama instance (qwen3:8b)
+RAW_PROVIDER = (os.getenv("AI_PROVIDER") or "").strip().lower()
 
-# Online API configuration (OpenRouter / Groq / OpenAI compatible)
-AI_API_BASE = os.getenv("AI_API_BASE", "https://openrouter.ai/api/v1").rstrip('/')
-AI_API_KEY = os.getenv("AI_API_KEY", "").strip()
-AI_MODEL = os.getenv("AI_MODEL", "meta-llama/llama-3.1-8b-instruct")
+# Online API configuration (Accepts OPENROUTER_API_KEY or AI_API_KEY)
+AI_API_BASE = (os.getenv("AI_API_BASE") or "https://openrouter.ai/api/v1").rstrip('/')
+AI_API_KEY = (os.getenv("OPENROUTER_API_KEY") or os.getenv("AI_API_KEY") or "").strip()
+AI_MODEL = (os.getenv("OPENROUTER_MODEL") or os.getenv("AI_MODEL") or "meta-llama/llama-3.1-8b-instruct").strip()
 
 # Local Ollama configuration
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip('/')
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:8b")
+OLLAMA_BASE_URL = (os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434").rstrip('/')
+OLLAMA_MODEL = (os.getenv("OLLAMA_MODEL") or "qwen3:8b").strip()
+
+# Determine active provider
+if RAW_PROVIDER in ("ollama", "local"):
+    AI_PROVIDER = "local"
+elif RAW_PROVIDER in ("openrouter", "api", "groq") or AI_API_KEY:
+    AI_PROVIDER = "openrouter"
+else:
+    AI_PROVIDER = "openrouter"
 
 
 def _is_local_provider() -> bool:
-    return AI_PROVIDER in ("local", "ollama")
+    return AI_PROVIDER == "local"
 
 
 def _clean_json_content(raw: str) -> str:
@@ -44,7 +52,7 @@ def _clean_json_content(raw: str) -> str:
 
 
 async def check_ai_status() -> Dict[str, Any]:
-    """Check status of either local Ollama or the online API."""
+    """Check status of either local Ollama or the online OpenRouter API."""
     if _is_local_provider():
         try:
             async with httpx.AsyncClient(timeout=3.0) as client:
@@ -84,26 +92,26 @@ async def check_ai_status() -> Dict[str, Any]:
                 "details": str(e),
             }
 
-    # Online API provider (OpenRouter / Cloud)
+    # Online API provider (OpenRouter)
     if not AI_API_KEY:
         return {
             "ok": False,
-            "provider": "api (Online)",
-            "error": "AI_API_KEY environment variable is not set.",
+            "provider": "openrouter (Online)",
+            "error": "OPENROUTER_API_KEY (or AI_API_KEY) environment variable is not set.",
         }
 
     return {
         "ok": True,
-        "provider": "api",
+        "provider": "openrouter",
         "model": AI_MODEL,
         "server": AI_API_BASE,
     }
 
 
 async def _execute_online_api_call(task_name: str, messages: List[Dict[str, str]], max_tokens: int = 80) -> Optional[Dict[str, Any]]:
-    """Execute JSON chat completion against OpenRouter / OpenAI-compatible API."""
+    """Execute JSON chat completion against OpenRouter API."""
     if not AI_API_KEY:
-        logger.warning("[AI API] AI_API_KEY is not configured.")
+        logger.warning("[AI API] OPENROUTER_API_KEY is not configured.")
         return None
 
     headers = {
@@ -165,7 +173,7 @@ async def _execute_ollama_call(task_name: str, messages: List[Dict[str, str]], m
 
 
 async def execute_ai_call(task_name: str, messages: List[Dict[str, str]], max_tokens: int = 80) -> Optional[Dict[str, Any]]:
-    """Route AI inference to either local Ollama or the default online API."""
+    """Route AI inference to either local Ollama or OpenRouter online API."""
     if _is_local_provider():
         return await _execute_ollama_call(task_name, messages, max_tokens)
     else:

@@ -1,7 +1,9 @@
 /**
  * caseStore.js
  *
- * Manages patient cases with strict Clinic Isolation.
+ * Manages patient cases with strict Multi-Tenant Clinic Isolation.
+ * The deployed backend and PostgreSQL database are the single source of truth.
+ *
  * Doctor operations (queue fetch and case updates) send cryptographic Bearer authentication.
  * Public patient intake submission remains accessible without doctor authentication.
  *
@@ -17,7 +19,7 @@
  * Status values: 'Waiting' | 'In Consultation' | 'Completed'
  */
 
-import { apiUrl } from './apiClient.js';
+import { safeFetch } from './apiClient.js';
 import { clinicAuthStore } from './clinicAuthStore.js';
 
 const LOCAL_STORAGE_CASES = 'precare_patient_cases';
@@ -27,7 +29,7 @@ function loadStoredCases() {
     const raw = localStorage.getItem(LOCAL_STORAGE_CASES);
     return raw ? JSON.parse(raw) : [];
   } catch (e) {
-    console.error('[caseStore] Error reading local cases:', e);
+    console.error('[caseStore] Error reading local cases cache:', e);
     return [];
   }
 }
@@ -39,7 +41,7 @@ function persistCases() {
   try {
     localStorage.setItem(LOCAL_STORAGE_CASES, JSON.stringify(_cases));
   } catch (e) {
-    console.error('[caseStore] Error persisting local cases:', e);
+    console.error('[caseStore] Error persisting local cases cache:', e);
   }
 }
 
@@ -49,11 +51,12 @@ function notify() {
 
 /** Deep-clone a case object to prevent external mutation */
 function cloneCase(c) {
+  if (!c) return null;
   return {
     ...c,
-    patientData: { ...c.patientData },
+    patientData: { ...(c.patientData || {}) },
     history: c.history ? { ...c.history } : null,
-    conversation: c.conversation ? [...c.conversation] : [],
+    conversation: Array.isArray(c.conversation) ? [...c.conversation] : [],
     soap: { ...(c.soap || {}) },
     doctorEditedHistory: { ...(c.doctorEditedHistory || {}) },
   };
@@ -61,38 +64,31 @@ function cloneCase(c) {
 
 /** Helper to send authenticated case updates to backend API */
 async function sendCaseUpdate(caseId, payload) {
-  try {
-    const res = await fetch(apiUrl(`/api/cases/${caseId}`), {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...clinicAuthStore.getAuthHeaders(),
-      },
-      body: JSON.stringify(payload),
-    });
+  const res = await safeFetch(`/api/cases/${caseId}`, {
+    method: 'PUT',
+    headers: {
+      ...clinicAuthStore.getAuthHeaders(),
+    },
+    body: JSON.stringify(payload),
+  });
 
-    if (res.status === 401) {
-      console.warn('[caseStore] 401 Unauthorized: Session expired.');
-      clinicAuthStore.handleAuthExpired();
-      return { ok: false, status: 401, error: 'Session expired' };
-    }
-
-    if (res.status === 403) {
-      console.error('[caseStore] 403 Forbidden: You do not own this patient case.');
-      return { ok: false, status: 403, error: 'Access denied' };
-    }
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      console.warn('[caseStore] Case update warning:', errData);
-      return { ok: false, error: errData.error || 'Update failed' };
-    }
-
-    return { ok: true };
-  } catch (e) {
-    console.warn('[caseStore] Network error updating case:', e.message);
-    return { ok: false, error: e.message };
+  if (res.status === 401) {
+    console.warn('[caseStore] 401 Unauthorized: Session expired.');
+    clinicAuthStore.handleAuthExpired();
+    return { ok: false, status: 401, error: 'Session expired' };
   }
+
+  if (res.status === 403) {
+    console.error('[caseStore] 403 Forbidden: You do not own this patient case.');
+    return { ok: false, status: 403, error: 'Access denied' };
+  }
+
+  if (!res.ok) {
+    console.warn('[caseStore] Case update warning:', res.error);
+    return { ok: false, error: res.error || 'Update failed' };
+  }
+
+  return { ok: true, case: res.case };
 }
 
 export const caseStore = {
@@ -110,45 +106,65 @@ export const caseStore = {
   },
 
   /**
-   * Sync cases from server for a specific clinic using Bearer token authentication.
+   * Sync cases from PostgreSQL backend for a specific clinic using Bearer token authentication.
    */
   async syncClinicCases(clinicId) {
     if (!clinicId) return { ok: false, error: 'Missing clinic ID' };
 
-    try {
-      const res = await fetch(apiUrl(`/api/clinics/${clinicId}/cases`), {
-        headers: {
-          ...clinicAuthStore.getAuthHeaders(),
-        },
-      });
+    const res = await safeFetch(`/api/clinics/${clinicId}/cases`, {
+      headers: {
+        ...clinicAuthStore.getAuthHeaders(),
+      },
+    });
 
-      if (res.status === 401) {
-        console.warn('[caseStore] 401 Unauthorized: Session expired on cases sync.');
-        clinicAuthStore.handleAuthExpired();
-        return { ok: false, status: 401, error: 'Session expired. Please log in again.' };
-      }
-
-      if (res.status === 403) {
-        console.error('[caseStore] 403 Forbidden: Access denied to this clinic queue.');
-        return { ok: false, status: 403, error: 'Access denied to this clinic queue.' };
-      }
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.ok && Array.isArray(data.cases)) {
-          // Keep cases from other clinics in local cache, replace current clinic cases
-          const otherCases = _cases.filter((c) => c.clinicId !== clinicId);
-          _cases = [...data.cases, ...otherCases];
-          persistCases();
-          notify();
-          return { ok: true, count: data.cases.length };
-        }
-      }
-      return { ok: false, error: 'Failed to fetch queue' };
-    } catch (e) {
-      console.warn('[caseStore] Could not sync cases from server:', e.message);
-      return { ok: false, error: e.message };
+    if (res.status === 401) {
+      console.warn('[caseStore] 401 Unauthorized: Session expired on cases sync.');
+      clinicAuthStore.handleAuthExpired();
+      return { ok: false, status: 401, error: 'Session expired. Please log in again.' };
     }
+
+    if (res.status === 403) {
+      console.error('[caseStore] 403 Forbidden: Access denied to this clinic queue.');
+      return { ok: false, status: 403, error: 'Access denied to this clinic queue.' };
+    }
+
+    if (res.ok && Array.isArray(res.cases)) {
+      // Keep cases from other clinics in local cache, replace current clinic cases with backend data
+      const otherCases = _cases.filter((c) => c.clinicId !== clinicId);
+      _cases = [...res.cases, ...otherCases];
+      persistCases();
+      notify();
+      return { ok: true, count: res.cases.length, cases: res.cases };
+    }
+
+    return { ok: false, error: res.error || 'Failed to fetch queue' };
+  },
+
+  /**
+   * Fetch a single case directly from the backend.
+   */
+  async fetchCaseById(caseId) {
+    if (!caseId) return null;
+
+    const res = await safeFetch(`/api/cases/${caseId}`, {
+      headers: {
+        ...clinicAuthStore.getAuthHeaders(),
+      },
+    });
+
+    if (res.ok && res.case) {
+      const idx = _cases.findIndex((c) => c.id === caseId);
+      if (idx !== -1) {
+        _cases[idx] = res.case;
+      } else {
+        _cases = [res.case, ..._cases];
+      }
+      persistCases();
+      notify();
+      return cloneCase(res.case);
+    }
+
+    return this.getCaseById(caseId);
   },
 
   /**
@@ -162,7 +178,7 @@ export const caseStore = {
     return _cases.map(cloneCase);
   },
 
-  /** Get a single case by ID. */
+  /** Get a single case by ID from cache. */
   getCaseById(id) {
     const c = _cases.find((c) => c.id === id);
     return c ? cloneCase(c) : undefined;
@@ -183,7 +199,7 @@ export const caseStore = {
     const timeLabel = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const dateLabel = now.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 
-    const newCase = {
+    const localCase = {
       id: `case-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
       clinicId,
       status: 'Waiting',
@@ -192,58 +208,55 @@ export const caseStore = {
       submittedDateLabel: dateLabel,
       patientData: { ...patientData },
       history: history ? { ...history } : null,
-      conversation: conversation ? [...conversation] : [],
+      conversation: Array.isArray(conversation) ? [...conversation] : [],
       doctorNotes: '',
       soap: { subjective: '', objective: '', assessment: '', plan: '' },
       doctorEditedHistory: {},
     };
 
-    // Optimistic local update
-    _cases = [newCase, ..._cases];
+    // Optimistic cache update
+    _cases = [localCase, ..._cases];
     persistCases();
     notify();
 
-    // Async server persistence (Public patient submission)
+    // Persist to FastAPI & PostgreSQL
     try {
-      fetch(apiUrl('/api/cases'), {
+      const res = await safeFetch('/api/cases', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clinicId, patientData, history, conversation }),
-      }).then(async (res) => {
-        if (res.ok) {
-          const data = await res.json();
-          if (data.ok && data.case) {
-            const idx = _cases.findIndex((c) => c.id === newCase.id);
-            if (idx !== -1) {
-              _cases[idx] = data.case;
-              persistCases();
-              notify();
-            }
-          }
+      });
+
+      if (res.ok && res.case) {
+        const idx = _cases.findIndex((c) => c.id === localCase.id);
+        if (idx !== -1) {
+          _cases[idx] = res.case;
+          persistCases();
+          notify();
         }
-      }).catch((e) => console.warn('[caseStore] Server save background warning:', e.message));
+        return res.case;
+      }
     } catch (e) {
-      console.warn('[caseStore] Sync attempt error:', e);
+      console.warn('[caseStore] Server sync notice:', e.message);
     }
 
-    return newCase;
+    return localCase;
   },
 
   /**
    * Update the status of a case with Bearer authorization.
    */
-  updateStatus(caseId, status) {
+  async updateStatus(caseId, status) {
     _cases = _cases.map((c) => (c.id === caseId ? { ...c, status } : c));
     persistCases();
     notify();
 
-    sendCaseUpdate(caseId, { status });
+    return await sendCaseUpdate(caseId, { status });
   },
 
   /**
    * Start consultation — sets status to 'In Consultation' with Bearer authorization.
    */
-  startConsultation(caseId) {
+  async startConsultation(caseId) {
     _cases = _cases.map((c) => {
       if (c.id !== caseId) return c;
       if (c.status === 'Completed') return c;
@@ -252,13 +265,13 @@ export const caseStore = {
     persistCases();
     notify();
 
-    sendCaseUpdate(caseId, { status: 'In Consultation' });
+    return await sendCaseUpdate(caseId, { status: 'In Consultation' });
   },
 
   /**
    * Save doctor consultation data without changing status (auto-save).
    */
-  saveConsultation(caseId, { doctorNotes, soap, doctorEditedHistory }) {
+  async saveConsultation(caseId, { doctorNotes, soap, doctorEditedHistory }) {
     _cases = _cases.map((c) => {
       if (c.id !== caseId) return c;
       return {
@@ -271,13 +284,13 @@ export const caseStore = {
     persistCases();
     notify();
 
-    sendCaseUpdate(caseId, { doctorNotes, soap, doctorEditedHistory });
+    return await sendCaseUpdate(caseId, { doctorNotes, soap, doctorEditedHistory });
   },
 
   /**
    * Complete consultation — saves all data and sets status to 'Completed'.
    */
-  completeConsultation(caseId, { doctorNotes, soap, doctorEditedHistory }) {
+  async completeConsultation(caseId, { doctorNotes, soap, doctorEditedHistory }) {
     const completedAt = new Date().toISOString();
     _cases = _cases.map((c) => {
       if (c.id !== caseId) return c;
@@ -293,7 +306,7 @@ export const caseStore = {
     persistCases();
     notify();
 
-    sendCaseUpdate(caseId, {
+    return await sendCaseUpdate(caseId, {
       status: 'Completed',
       doctorNotes,
       soap,

@@ -1,40 +1,43 @@
 import { detectCategory, getNextQuestion } from './questionEngine.js';
 import { URGENT_PATTERNS } from '../data/questionFlows.js';
-import { apiUrl } from './apiClient.js';
+import { safeFetch } from './apiClient.js';
 
 /**
- * AI Service Layer connecting to Local Ollama with model `qwen3:8b`
- * via the application backend (/api/ollama/*).
+ * AI Service Layer connecting to PreCare Backend
+ * Supports:
+ *   - OpenRouter API (Default in Production)
+ *   - Local Ollama with model `qwen3:8b` (Development option)
  *
  * Performance Optimizations:
- * - Disabled Qwen3 extended thinking/reasoning mode (think: false)
- * - Concise, zero-preamble prompts
- * - Capped token generation (num_predict: 70-80)
- * - Exactly 1 Ollama call per patient interaction
- * - Detailed timing and size logging
+ * - Direct JSON output
+ * - Capped token generation
+ * - 1 single AI call per patient turn
+ * - Automatic rule-based fallback if AI is offline
  */
 
 class AIService {
   constructor() {
-    this.modelName = 'qwen3:8b';
+    this.modelName = 'meta-llama/llama-3.1-8b-instruct';
   }
 
   /**
-   * Check connection status to local Ollama via backend.
-   * @returns {Promise<{ ok: boolean, model?: string, error?: string, modelMissing?: boolean }>}
+   * Check connection status of active AI service via backend.
+   * @returns {Promise<{ ok: boolean, provider?: string, model?: string, error?: string }>}
    */
   async checkStatus() {
-    try {
-      const res = await fetch(apiUrl('/api/ollama/status'));
-      const data = await res.json();
-      return data;
-    } catch (err) {
+    const res = await safeFetch('/api/ai/status');
+    if (res.ok) {
       return {
-        ok: false,
-        error: 'Local AI is unavailable. Please make sure Ollama is running.',
-        details: err.message,
+        ok: true,
+        provider: res.provider,
+        model: res.model,
+        server: res.server,
       };
     }
+    return {
+      ok: false,
+      error: res.error || 'AI service is currently unavailable.',
+    };
   }
 
   /**
@@ -60,7 +63,7 @@ class AIService {
   }
 
   /**
-   * Analyze initial patient complaint using Ollama qwen3:8b.
+   * Analyze initial patient complaint using PreCare AI backend.
    * Extracts category, chief complaint, and any inline duration or location already stated.
    *
    * @param {string} rawComplaint
@@ -70,176 +73,136 @@ class AIService {
     const trimmed = rawComplaint.trim();
     const urgency = this.screenUrgency(trimmed);
 
-    console.log(`[AI Client] LLM request started: analyze-complaint`);
-    console.log(`[AI Client] Number of Ollama calls for this patient message: 1`);
-    console.log(`[AI Client] Input prompt size: ${trimmed.length} characters`);
-
-    const startTime = performance.now();
     let extractedData = null;
 
     try {
-      const res = await fetch(apiUrl('/api/ollama/analyze'), {
+      const res = await safeFetch('/api/ai/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ complaint: trimmed }),
       });
 
-      const responseJson = await res.json();
-      const elapsedSec = ((performance.now() - startTime) / 1000).toFixed(2);
-
-      if (responseJson.ok && responseJson.data) {
-        extractedData = responseJson.data;
-        const respSize = JSON.stringify(extractedData).length;
-        console.log(`[AI Client] LLM request completed: analyze-complaint`);
-        console.log(`[AI Client] Total time: ${elapsedSec} seconds`);
-        console.log(`[AI Client] Response size: ${respSize} characters`);
-      } else {
-        throw new Error(
-          responseJson.error ||
-          'Local AI is unavailable. Please make sure Ollama is running.'
-        );
+      if (res.ok && res.data) {
+        extractedData = res.data;
       }
     } catch (err) {
-      console.warn('[AI Client] Ollama analysis warning:', err.message);
-      if (
-        err.message.includes('unavailable') ||
-        err.message.includes('Ollama')
-      ) {
-        throw err;
-      }
+      console.warn('[AI Client] Complaint analysis network notice:', err.message);
     }
 
-    // Determine category with Ollama or fallback to category keywords
-    const category =
-      extractedData?.category || detectCategory(trimmed);
+    // Heuristic fallback if AI is unavailable
+    if (!extractedData) {
+      extractedData = {
+        category: detectCategory(trimmed),
+        duration: null,
+        location: null,
+        severity: null,
+      };
+    }
 
-    const structured = {
+    const category = extractedData.category || detectCategory(trimmed);
+
+    const history = {
       chief_complaint: trimmed,
-      category: category,
-      duration: extractedData?.duration || null,
-      location: extractedData?.location || null,
-      severity: extractedData?.severity || null,
-      onset: null,
-      symptoms: [trimmed],
+      category,
+      duration: extractedData.duration || 'Not reported',
+      location: extractedData.location || 'Not reported',
+      severity: extractedData.severity || 'Not reported',
       associated_symptoms: {},
-      medical_history: null,
-      medications: null,
-      allergies: null,
-      is_urgent: urgency.isUrgent,
-      urgent_reason: urgency.reason,
-      model: this.modelName,
+      red_flags: urgency.isUrgent ? [urgency.reason] : [],
+      extra_notes: '',
     };
 
-    return structured;
+    const firstQuestion = getNextQuestion(history, 0);
+
+    return {
+      history,
+      urgency,
+      category,
+      firstQuestion,
+    };
   }
 
   /**
-   * Process patient's answer using Ollama qwen3:8b.
-   * Updates the structured history state and generates a concise clinical acknowledgement.
+   * Process patient's answer using PreCare AI backend.
+   * Updates clinical history and generates next relevant question.
    *
    * @param {string} patientAnswer
-   * @param {string} targetField - The field ID currently queried
-   * @param {Object} currentHistory - Current structured history
-   * @returns {Promise<{ updatedHistory: Object, extractedValue: string, acknowledgement: string }>}
+   * @param {string} targetField
+   * @param {Object} currentHistory
+   * @returns {Promise<{ acknowledgement: string, nextQuestion: Object|null, updatedHistory: Object, urgency: Object }>}
    */
   async processAnswer(patientAnswer, targetField, currentHistory) {
     const trimmed = patientAnswer.trim();
     const urgency = this.screenUrgency(trimmed);
 
-    console.log(`[AI Client] LLM request started: extract-answer (${targetField})`);
-    console.log(`[AI Client] Number of Ollama calls for this patient message: 1`);
-    console.log(`[AI Client] Patient answer size: ${trimmed.length} characters`);
-
-    const startTime = performance.now();
     let extractedValue = trimmed;
     let acknowledgement = 'Thank you, noted.';
 
     try {
-      const res = await fetch(apiUrl('/api/ollama/extract'), {
+      const res = await safeFetch('/api/ai/extract', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           patientAnswer: trimmed,
           targetField,
         }),
       });
 
-      const responseJson = await res.json();
-      const elapsedSec = ((performance.now() - startTime) / 1000).toFixed(2);
-
-      if (responseJson.ok && responseJson.data) {
-        extractedValue = responseJson.data.extracted_value || trimmed;
-        acknowledgement =
-          responseJson.data.acknowledgement || 'Thank you, noted.';
-        const respSize = (
-          (responseJson.data.extracted_value || '') +
-          (responseJson.data.acknowledgement || '')
-        ).length;
-
-        console.log(`[AI Client] LLM request completed: extract-answer (${targetField})`);
-        console.log(`[AI Client] Total time: ${elapsedSec} seconds`);
-        console.log(`[AI Client] Response size: ${respSize} characters`);
-      } else {
-        throw new Error(
-          responseJson.error ||
-          'Local AI is unavailable. Please make sure Ollama is running.'
-        );
+      if (res.ok && res.data) {
+        extractedValue = res.data.extracted_value || trimmed;
+        acknowledgement = res.data.acknowledgement || 'Thank you, noted.';
       }
     } catch (err) {
-      console.warn('[AI Client] Ollama answer extraction warning:', err.message);
+      console.warn('[AI Client] Answer extraction notice:', err.message);
       if (
-        err.message.includes('unavailable') ||
-        err.message.includes('Ollama')
+        /^(no|nope|not really|none|nil|negative|never)/i.test(trimmed)
       ) {
-        throw err;
+        extractedValue = 'Denied (No)';
+      } else if (
+        /^(yes|yeah|yep|sure|correct|true)/i.test(trimmed)
+      ) {
+        extractedValue = 'Confirmed (Yes)';
       }
     }
 
     const updatedHistory = {
       ...currentHistory,
       associated_symptoms: { ...(currentHistory.associated_symptoms || {}) },
-      is_urgent: currentHistory.is_urgent || urgency.isUrgent,
-      urgent_reason: currentHistory.urgent_reason || urgency.reason,
+      red_flags: [...(currentHistory.red_flags || [])],
     };
 
-    // Store in appropriate location based on field type
-    switch (targetField) {
-      case 'severity':
-        updatedHistory.severity = extractedValue;
-        break;
-      case 'duration':
-        updatedHistory.duration = extractedValue;
-        break;
-      case 'location':
-        updatedHistory.location = extractedValue;
-        break;
-      case 'medical_history':
-        updatedHistory.medical_history = extractedValue;
-        break;
-      case 'medications':
-        updatedHistory.medications = extractedValue;
-        break;
-      default:
-        updatedHistory.associated_symptoms[targetField] = extractedValue;
-        break;
+    if (urgency.isUrgent && !updatedHistory.red_flags.includes(urgency.reason)) {
+      updatedHistory.red_flags.push(urgency.reason);
     }
 
-    return {
-      updatedHistory,
-      extractedValue,
-      acknowledgement,
-    };
-  }
+    if (targetField && targetField !== 'open') {
+      if (
+        targetField.startsWith('associated_') ||
+        ['fever', 'nausea', 'vomiting', 'photophobia', 'shortness_of_breath', 'chest_tightness'].includes(targetField)
+      ) {
+        updatedHistory.associated_symptoms[targetField] = extractedValue;
+      } else if (targetField === 'onset_and_location') {
+        if (!updatedHistory.duration || updatedHistory.duration === 'Not reported') {
+          updatedHistory.duration = extractedValue;
+        }
+        if (!updatedHistory.location || updatedHistory.location === 'Not reported') {
+          updatedHistory.location = extractedValue;
+        }
+      } else {
+        updatedHistory[targetField] = extractedValue;
+      }
+    }
 
-  /**
-   * Generate next question from clinical question selection engine.
-   *
-   * @param {Object} historyState
-   * @param {number} totalQuestionsAsked
-   * @returns {Promise<{ question: string, targetField: string|null, isComplete: boolean }>}
-   */
-  async getNextQuestion(historyState, totalQuestionsAsked) {
-    return getNextQuestion(historyState, totalQuestionsAsked);
+    const currentTurn =
+      Object.keys(updatedHistory.associated_symptoms).length +
+      (updatedHistory.severity !== 'Not reported' ? 1 : 0);
+
+    const nextQuestion = getNextQuestion(updatedHistory, currentTurn);
+
+    return {
+      acknowledgement,
+      nextQuestion,
+      updatedHistory,
+      urgency,
+    };
   }
 }
 

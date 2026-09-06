@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException, Request, Response, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from .database import get_connection, init_db
+from .database import get_connection, init_db, check_db_health
 from .auth import (
     hash_password,
     verify_password,
@@ -70,11 +70,16 @@ def on_startup():
 # -----------------------------------------------------------------------------
 @app.get("/health")
 def health_check():
-    """Simple production health check endpoint for monitoring and cloud host probes."""
+    """Simple production health check endpoint with safe database status probe."""
+    db_health = check_db_health()
     return {
         "status": "ok",
         "service": "precare-backend",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "database": {
+            "status": db_health.get("status", "unknown"),
+            "engine": db_health.get("engine", "sqlite"),
+        }
     }
 
 # -----------------------------------------------------------------------------
@@ -407,6 +412,16 @@ def submit_case(req: PatientCaseCreate):
 
     conn = get_connection()
     cursor = conn.cursor()
+
+    # Verify clinic exists
+    cursor.execute("SELECT id FROM clinics WHERE id = ?", (req.clinicId,))
+    if not cursor.fetchone():
+        conn.close()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"ok": False, "error": f"Clinic with ID '{req.clinicId}' does not exist."}
+        )
+
     cursor.execute("""
         INSERT INTO cases (
             id, clinic_id, status, patient_data, history, conversation,
@@ -445,6 +460,55 @@ def submit_case(req: PatientCaseCreate):
         "submittedDateLabel": d_label,
     }
     return {"ok": True, "case": new_case}
+
+
+@app.get("/api/cases/{case_id}")
+def get_case(
+    case_id: str,
+    current_clinic: Dict[str, Any] = Depends(get_current_clinic),
+):
+    """
+    Retrieve a single case by ID with strict clinic ownership enforcement.
+    Requires valid Bearer token and verifies the case belongs to the authenticated clinic.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM cases WHERE id = ?", (case_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"ok": False, "error": "Case not found."}
+        )
+
+    d = dict(row)
+    if d["clinic_id"] != current_clinic["id"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"ok": False, "error": "Forbidden: You do not have access to this case."}
+        )
+
+    return {
+        "ok": True,
+        "case": {
+            "id": d["id"],
+            "clinicId": d["clinic_id"],
+            "status": d["status"],
+            "patientData": json.loads(d["patient_data"] or "{}"),
+            "history": json.loads(d["history"] or "{}"),
+            "conversation": json.loads(d["conversation"] or "[]"),
+            "doctorNotes": d["doctor_notes"],
+            "soap": json.loads(d["soap"] or "{}"),
+            "doctorEditedHistory": json.loads(d["doctor_edited_history"] or "{}"),
+            "submittedAt": d["submitted_at"],
+            "submittedTimeLabel": d["submitted_time_label"],
+            "submittedDateLabel": d["submitted_date_label"],
+            "completedAt": d["completed_at"],
+            "updatedAt": d["updated_at"],
+        }
+    }
 
 
 @app.put("/api/cases/{case_id}")

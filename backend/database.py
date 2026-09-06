@@ -8,7 +8,8 @@ from typing import Any, Optional, Union, List, Dict
 
 logger = logging.getLogger("precare.database")
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./precare.sqlite").strip()
+RAW_DB_URL = (os.getenv("DATABASE_URL") or "").strip()
+DATABASE_URL = RAW_DB_URL if RAW_DB_URL else "sqlite:///./precare.sqlite"
 
 IS_POSTGRES = DATABASE_URL.startswith("postgres://") or DATABASE_URL.startswith("postgresql://")
 
@@ -37,8 +38,6 @@ class DatabaseCursor:
         row = self._cursor.fetchone()
         if row is None:
             return None
-        if self._is_postgres:
-            return dict(row)
         return dict(row)
 
     def fetchall(self) -> List[Dict[str, Any]]:
@@ -98,13 +97,34 @@ def get_connection() -> DatabaseConnection:
                 "Run 'pip install psycopg2-binary' or use SQLite for local development."
             )
         except Exception as e:
-            logger.error(f"Failed to connect to PostgreSQL at {DATABASE_URL}: {e}")
+            logger.error(f"Failed to connect to PostgreSQL: {e}")
             raise
     else:
         db_file = get_sqlite_path()
         conn = sqlite3.connect(str(db_file))
         conn.row_factory = sqlite3.Row
         return DatabaseConnection(conn, is_postgres=False)
+
+
+def check_db_health() -> Dict[str, Any]:
+    """Safe database connectivity probe without leaking credentials."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        row = cursor.fetchone()
+        conn.close()
+        return {
+            "status": "connected" if row else "degraded",
+            "engine": "postgresql" if IS_POSTGRES else "sqlite",
+        }
+    except Exception as e:
+        logger.warning(f"Database health probe exception: {e}")
+        return {
+            "status": "disconnected",
+            "engine": "postgresql" if IS_POSTGRES else "sqlite",
+            "error": "Connection probe failed",
+        }
 
 
 def init_db():
@@ -156,6 +176,28 @@ def init_db():
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_cases_clinic_id ON cases (clinic_id)
         """)
+
+        # Ensure default clinic exists for fallback patient intake
+        cursor.execute("SELECT id FROM clinics WHERE id = ?", ("default-clinic",))
+        if not cursor.fetchone():
+            cursor.execute("""
+                INSERT INTO clinics (
+                    id, clinic_name, doctor_name, email, phone, specialization, location, languages,
+                    password_hash, salt, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                "default-clinic",
+                "PreCare General Clinic",
+                "Dr. PreCare",
+                "clinic@precare.health",
+                "+1-555-0100",
+                "General Practice",
+                "PreCare Health Center",
+                json.dumps(["English", "Hindi", "Marathi"]),
+                "system-default-account-not-for-login",
+                "system-salt",
+                "2024-01-01T00:00:00Z"
+            ))
 
         conn.commit()
         conn.close()
